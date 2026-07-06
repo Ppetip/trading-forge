@@ -33,9 +33,28 @@ export function enforceSameOrigin(request) {
   const origin = request.headers.origin;
   if (!origin) return;
   const host = request.headers.host;
-  if (new URL(origin).host !== host) {
+  if (!isAllowedWriteOrigin(origin, host)) {
     const error = new Error("Cross-origin write rejected."); error.status = 403; error.code = "ORIGIN_REJECTED"; throw error;
   }
+}
+
+function isAllowedWriteOrigin(origin, host) {
+  let parsed;
+  try { parsed = new URL(origin); } catch { return false; }
+  if (parsed.host === host) return true;
+  const configured = [
+    process.env.EDGELAB_APP_URL,
+    process.env.VITE_APP_URL,
+    ...(process.env.EDGELAB_ALLOWED_ORIGINS ?? "").split(",")
+  ].map((value) => String(value ?? "").trim()).filter(Boolean);
+  if (configured.some((value) => {
+    try { return new URL(value).origin === parsed.origin; } catch { return value === parsed.origin; }
+  })) return true;
+  if (process.env.NODE_ENV === "production") return false;
+  const apiHost = String(host ?? "").split(":")[0].toLowerCase();
+  const originHost = parsed.hostname.toLowerCase();
+  const loopback = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+  return loopback.has(apiHost) && loopback.has(originHost);
 }
 
 const identityHash = (email) => createHash("sha256").update(String(email).trim().toLowerCase()).digest("hex");
