@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import { createDatabase } from "./db.mjs";
 import { routeMarketData, estimateDataCost } from "./market-data-router.mjs";
@@ -41,10 +41,22 @@ test("free accounts cannot explicitly request premium data", async () => {
   db.close();
 });
 
+test("free 30-day intraday requests fetch only the requested safe window", async () => {
+  const db = createDatabase(":memory:"), user = account(db); let requestedUrl = "";
+  const routed = await routeMarketData({ db, account: user, rules: { ...rules, symbol: `TEST${Math.floor(Math.random() * 1e9)}`, timeframe: "15m", dateRange: "30d" },
+    now: new Date("2026-07-06T12:00:00Z"),
+    fetchImpl: async (url) => { requestedUrl = String(url); return { ok: true, json: async () => ({ chart: { result: [{ meta: { exchangeName: "NYQ", currency: "USD" },
+      timestamp: [1751328000], indicators: { quote: [{ open: [500], high: [505], low: [499], close: [504] }], adjclose: [{ adjclose: [503] }] } }] } }) }; } });
+  const query = new URL(requestedUrl), spanDays = (Number(query.searchParams.get("period2")) - Number(query.searchParams.get("period1"))) / 86400;
+  assert.equal(routed.dataProvenance.provider, "yahoo");
+  assert.equal(routed.dataProvenance.interval, "15m");
+  assert.equal(spanDays, 30);
+  db.close();
+});
 test("free long intraday requests explain the upgrade instead of silently clipping", async () => {
   const db = createDatabase(":memory:"), user = account(db);
   await assert.rejects(routeMarketData({ db, account: user, rules: { ...rules, timeframe: "5m", dateRange: "3y" } }),
-    (error) => error.code === "PREMIUM_INTRADAY_REQUIRED" && error.status === 402 && error.details.researchLimitDays === 60 && /Upgrade to Pro/.test(error.message));
+    (error) => error.code === "PREMIUM_INTRADAY_REQUIRED" && error.status === 402 && error.details.researchLimitDays === 59 && /Upgrade to Pro/.test(error.message));
   db.close();
 });
 

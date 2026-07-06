@@ -1,4 +1,4 @@
-﻿import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SaaSWorkspace from "./SaaSWorkspace";
 
@@ -21,9 +21,21 @@ const csv = () => `timestamp,open,high,low,close
 2026-01-05T08:20:00,104,112,103.5,111`;
 
 describe("server-backed SaaS workspace", () => {
-  beforeEach(() => { window.location.hash = "#/saas"; });
+  beforeEach(() => { window.localStorage.clear(); window.location.hash = "#/saas"; });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
+  it("starts free accounts with a research-grade-safe SPY window", async () => {
+    vi.stubGlobal("fetch", vi.fn((path: string) => path === "/api/account"
+      ? response(200, { account })
+      : response(404, { error: { message: "Not found" } })));
+    render(<SaaSWorkspace />);
+    await screen.findByText("Describe the strategy");
+    expect(screen.getByDisplayValue("SPY")).toBeTruthy();
+    expect(screen.getByDisplayValue("15m")).toBeTruthy();
+    expect(screen.getByDisplayValue("30 days · Free intraday")).toBeTruthy();
+    expect(screen.getByDisplayValue("09:30")).toBeTruthy();
+    expect(screen.queryByText("Premium data required")).toBeNull();
+  });
   it("registers an account and opens the workspace", async () => {
     let authenticated = false;
     vi.stubGlobal("fetch", vi.fn((path: string, init?: RequestInit) => {

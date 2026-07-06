@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createDatabase } from "./db.mjs";
@@ -31,7 +31,25 @@ const rules = {
 
 async function withApi(callback) {
   const db = createDatabase(":memory:");
-  const server = createEdgeLabServer({ db });
+  const server = createEdgeLabServer({
+    db,
+    enableAdminApi: true,
+    preflightClassifier: async () => ({
+      version: "test",
+      inputTier: "STRATEGY_READY",
+      nextWorkflowTier: "FULL_STRATEGY_PARSER",
+      strategyFamily: "OPENING_RANGE_BREAKOUT",
+      planImplication: "FREE_OK",
+      confidence: 0.95,
+      reasons: ["test harness"],
+      warnings: [],
+      missingFields: [],
+      detectedSymbols: [],
+      shouldRunFullParser: true,
+      fallbackUsed: true
+    }),
+    aiParser: async (prompt, defaults) => parseStrategyPrompt(prompt, defaults)
+  });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -153,6 +171,25 @@ test("account, versioning, server backtest, cache, reports, and limits work toge
   });
 });
 
+test("admin API is disabled unless the ops process explicitly enables it", async () => {
+  const db = createDatabase(":memory:");
+  const server = createEdgeLabServer({ db, enableAdminApi: false });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const cookie = await register(base, "admin-disabled@example.com");
+    const userId = db.prepare("SELECT id FROM users LIMIT 1").get().id;
+    db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(userId);
+    const metrics = await request(base, "/api/admin/metrics", { cookie });
+    assert.equal(metrics.response.status, 404);
+  } finally {
+    server.close();
+    await once(server, "close");
+    db.close();
+  }
+});
+
 test("authentication rejects duplicates and invalid credentials", async () => {
   await withApi(async ({ base }) => {
     await register(base);
@@ -207,3 +244,4 @@ test("preflight endpoint gates low-confidence prompts before full parser", async
     db.close();
   }
 });
+

@@ -48,6 +48,47 @@ docker compose ps
 
 The web container listens on `EDGELAB_HTTP_PORT` and proxies `/api` to the API container. Put the deployment behind an HTTPS load balancer or reverse proxy and forward the public hostname.
 
+## Render
+
+Use `render.yaml` as the blueprint when possible. It pins pnpm through `npx` so Render does not try to overwrite the read-only system pnpm binary.
+
+If configuring the Render service manually, use:
+
+```text
+Runtime: Node
+Build Command: CI=true npx --yes pnpm@9.15.9 install --frozen-lockfile && npx --yes pnpm@9.15.9 build
+Start Command: node server/server.mjs
+Health Check Path: /api/health
+```
+
+Required Render environment variables:
+
+```dotenv
+NODE_ENV=production
+HOST=0.0.0.0
+EDGELAB_STATIC_DIR=dist
+EDGELAB_DB_PATH=/opt/render/project/src/data/edgelab.sqlite
+EDGELAB_DB_DRIVER=postgres
+DATABASE_URL=<Neon Postgres connection string>
+MARKET_DATA_CACHE_PATH=/opt/render/project/src/data/market-cache
+EDGELAB_ENABLE_ADMIN_API=false
+```
+
+With `DATABASE_URL` present and `EDGELAB_DB_DRIVER=postgres`, the app uses Neon Postgres for accounts, sessions, reports, billing, usage events, transcripts, and admin settings. Keep a persistent disk mounted at `/opt/render/project/src/data` for the market-data cache. Set `EDGELAB_DB_DRIVER=sqlite` only for local SQLite fallback. Do not use `corepack enable`, `npm install -g pnpm`, or `pnpm add -g pnpm` in Render build commands; those can fail with `EROFS: read-only file system, unlink '/usr/bin/pnpm'`.
+
+## Admin operations
+
+Do not deploy the admin UI with the customer-facing web app. The default public build only emits `dist/index.html`, and the default API leaves `/api/admin/*` disabled.
+
+For trusted local operations, run a separate admin API process and admin web entry against the configured database:
+
+```powershell
+pnpm server:admin
+pnpm dev:admin
+```
+
+Only set `EDGELAB_ENABLE_ADMIN_API=true` on that trusted ops process. Keep it unset or `false` for public hosting.
+
 ## Persistence and operations
 
 - SQLite data is stored in the named `edgelab_data` volume.

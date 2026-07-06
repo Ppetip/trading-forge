@@ -94,11 +94,11 @@ export function verifyStripeSignature(rawBody, signatureHeader, secret = process
 
 const normalizedStatus = (status) => status === "active" ? "active" : status === "trialing" ? "trialing" : status === "canceled" ? "canceled" : "past_due";
 
-export function applyStripeEvent(db, event, now = new Date()) {
+export async function applyStripeEvent(db, event, now = new Date()) {
   const object = event?.data?.object;
   if (!event?.id || !event.type || !object) throw Object.assign(new Error("Stripe event payload is invalid."), { status: 400, code: "BAD_REQUEST" });
-  db.exec("CREATE TABLE IF NOT EXISTS billing_events (provider_event_id TEXT PRIMARY KEY, event_type TEXT NOT NULL, processed_at TEXT NOT NULL)");
-  if (db.prepare("SELECT 1 FROM billing_events WHERE provider_event_id = ?").get(event.id)) return { accepted: true, duplicate: true };
+  await db.exec("CREATE TABLE IF NOT EXISTS billing_events (provider_event_id TEXT PRIMARY KEY, event_type TEXT NOT NULL, processed_at TEXT NOT NULL)");
+  if (await db.prepare("SELECT 1 FROM billing_events WHERE provider_event_id = ?").get(event.id)) return { accepted: true, duplicate: true };
   let userId, plan, status, customerId, subscriptionId, periodEnd;
   if (event.type === "checkout.session.completed") {
     userId = object.client_reference_id ?? object.metadata?.edgelab_user_id;
@@ -110,16 +110,16 @@ export function applyStripeEvent(db, event, now = new Date()) {
     customerId = object.customer; subscriptionId = object.id;
     periodEnd = object.current_period_end ? new Date(object.current_period_end * 1000).toISOString() : null;
   } else {
-    db.prepare("INSERT INTO billing_events (provider_event_id, event_type, processed_at) VALUES (?, ?, ?)").run(event.id, event.type, now.toISOString());
+    await db.prepare("INSERT INTO billing_events (provider_event_id, event_type, processed_at) VALUES (?, ?, ?)").run(event.id, event.type, now.toISOString());
     return { accepted: true, ignored: true };
   }
   if (!userId) throw Object.assign(new Error("Stripe event is missing the EdgeLab user reference."), { status: 400, code: "BAD_REQUEST" });
-  const result = db.prepare(`
+  const result = await db.prepare(`
     UPDATE subscriptions SET plan = ?, status = ?, provider_customer_id = COALESCE(?, provider_customer_id),
       provider_subscription_id = COALESCE(?, provider_subscription_id), current_period_ends_at = ?, updated_at = ?
     WHERE user_id = ?
   `).run(plan, status, customerId ?? null, subscriptionId ?? null, periodEnd ?? null, now.toISOString(), userId);
   if (!result.changes) throw Object.assign(new Error("Billing user does not exist."), { status: 400, code: "BAD_REQUEST" });
-  db.prepare("INSERT INTO billing_events (provider_event_id, event_type, processed_at) VALUES (?, ?, ?)").run(event.id, event.type, now.toISOString());
+  await db.prepare("INSERT INTO billing_events (provider_event_id, event_type, processed_at) VALUES (?, ?, ?)").run(event.id, event.type, now.toISOString());
   return { accepted: true, duplicate: false, userId, plan, status };
 }

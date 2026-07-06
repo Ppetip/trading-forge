@@ -27,8 +27,8 @@ const inspiredNames = [
 ] as const;
 
 const commonNames = [
-  ["8am-orb", "8 AM ORB", "NQ 15-minute opening range beginning at 8:00 AM New York time."],
-  ["930-orb", "9:30 AM ORB", "Trade a break of the first 15 minutes of the cash session."],
+  ["8am-orb", "QQQ 9:30 AM ORB", "QQQ 15-minute opening range beginning at the 9:30 AM New York cash open."],
+  ["930-orb", "SPY 60-minute ORB", "Trade a break of the first 60 minutes of the SPY cash session."],
   ["pdh-long", "Previous day high breakout", "Enter long when price confirms above the prior-day high."],
   ["pdl-short", "Previous day low breakdown", "Enter short when price confirms below the prior-day low."],
   ["pdh-sweep", "Previous day high sweep reversal", "Short after a failed break above the prior-day high."],
@@ -49,11 +49,13 @@ const make = (pack: SampleStrategy["pack"], rows: readonly (readonly [string, st
     id, name, concept, pack,
     engine: id === "opening-range" || id === "8am-orb" || id === "930-orb" ? "available" : "roadmap",
     tier: id === "opening-range" || id === "8am-orb" || id === "930-orb" ? "ready" : /rsi|ema|vwap|gap|can-slim|darvas|volatility|mean/.test(id) ? "pro" : "clarify",
-    examplePrompt: id === "8am-orb" || id === "opening-range"
-      ? "Test the 8 AM opening range breakout on NQ. Use a 15-minute range, 5-minute candles, stop at the opposite side of the range, take profit at 1:3, one trade per day."
-      : id === "930-orb"
-        ? "Test the 9:30 AM opening range breakout on SPY. Use a 15-minute range, 5-minute candles, stop at the opposite side of the range, take profit at 1:2, one trade per day."
-        : `${name}: ${concept} Define the market, timeframe, objective entry trigger, stop loss, take profit, filters, and one-trade-per-day rule before testing.`
+    examplePrompt: id === "opening-range"
+      ? "Test the 9:30 AM opening range breakout on USO. Use a 30-minute range, 15-minute candles, stop at the opposite side of the range, take profit at 1:2, one trade per day."
+      : id === "8am-orb"
+        ? "Test the 9:30 AM opening range breakout on QQQ. Use a 15-minute range, 15-minute candles, stop at the opposite side of the range, take profit at 1:3, one trade per day."
+        : id === "930-orb"
+          ? "Test the 9:30 AM opening range breakout on SPY. Use a 60-minute range, 15-minute candles, stop at the opposite side of the range, take profit at 1:2, one trade per day."
+          : `${name}: ${concept} Define the market, timeframe, objective entry trigger, stop loss, take profit, filters, and one-trade-per-day rule before testing.`
   }));
 
 export const SAMPLE_STRATEGIES = [

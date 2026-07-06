@@ -21,6 +21,7 @@ web_modules/
 
 # Build and cache output
 dist/
+dist-admin/
 out/
 .vite/
 .cache/
@@ -75,4 +76,3 @@ vite.config.ts.timestamp-*
 Thumbs.db
 .node_repl_history
 .vscode-test
-

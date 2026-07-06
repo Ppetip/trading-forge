@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Activity, Beaker, CircleDollarSign, Database, Gauge, ShieldCheck, Users } from "lucide-react";
-import { opsApi, type AdminMetrics, type DataControls } from "./saas-ops-api";
+import { adminApi, type AdminMetrics, type DataControls } from "./admin-api";
 
 type MetricRow = [string | number, string | number];
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
@@ -8,15 +8,15 @@ const controlLabels: Record<keyof DataControls, string> = { disableDatabento: "D
 
 export default function AdminDashboard() {
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null), [error, setError] = useState(""), [saving, setSaving] = useState("");
-  const load = () => opsApi.adminMetrics().then(({ metrics }) => setMetrics(metrics)).catch((caught) => setError((caught as Error).message));
+  const load = () => adminApi.metrics().then(({ metrics }) => setMetrics(metrics)).catch((caught) => setError((caught as Error).message));
   useEffect(() => { void load(); }, []);
-  async function toggle(key: keyof DataControls) { if (!metrics) return; setSaving(key); setError(""); try { await opsApi.updateDataControls({ [key]: !metrics.dataSpend.controls[key] }); await load(); } catch (caught) { setError((caught as Error).message); } finally { setSaving(""); } }
-  if (error && !metrics) return <div className="plans-loading"><ShieldCheck /><span>{error}</span><a href="#/app">Workspace</a></div>;
+  async function toggle(key: keyof DataControls) { if (!metrics) return; setSaving(key); setError(""); try { await adminApi.updateDataControls({ [key]: !metrics.dataSpend.controls[key] }); await load(); } catch (caught) { setError((caught as Error).message); } finally { setSaving(""); } }
+  if (error && !metrics) return <div className="plans-loading"><ShieldCheck /><span>{error}</span><a href="/#/app">Workspace</a></div>;
   if (!metrics) return <div className="plans-loading"><Gauge />Loading operational metricsâ€¦</div>;
   const userStats: MetricRow[] = [["Total users", metrics.users.total], ["New signups Â· 30d", metrics.users.newSignups30d], ["Free", metrics.users.free], ["Trial", metrics.users.trial], ["Paid", metrics.users.paid], ["Conversion", percent(metrics.users.conversionRate)], ["Churn", percent(metrics.users.churnRate)]];
   const activities: MetricRow[] = [["Backtests", metrics.activity.backtests], ["Reports", metrics.activity.reports], ["Strategies saved", metrics.activity.strategiesSaved], ["Pine exports", metrics.activity.pineExports], ["Transcript uploads", metrics.activity.transcriptUploads], ["Failed tests", metrics.activity.failedTests]];
   const dataRows: MetricRow[] = [["Data requests", metrics.dataSpend.requests], ["Cache hits", metrics.dataSpend.cacheHits], ["Cache misses", metrics.dataSpend.cacheMisses], ["Provider fetches", metrics.dataSpend.providerFetches], ["Provider errors", metrics.dataSpend.providerErrors], ["Premium rows", metrics.dataSpend.premiumRows], ["Premium blocks", metrics.dataSpend.premiumBlocked], ["Proxy uses", metrics.dataSpend.proxyUses]];
-  return <div className="admin-page"><header><a className="saas-brand" href="#/"><span><Beaker size={17} /></span>Edge<i>Lab</i></a><span><ShieldCheck size={13} />ADMIN ONLY</span><a href="#/app">Workspace</a></header><main>
+  return <div className="admin-page"><header><a className="saas-brand" href="/"><span><Beaker size={17} /></span>Edge<i>Lab</i></a><span><ShieldCheck size={13} />ADMIN ONLY</span><a href="/#/app">Workspace</a></header><main>
     <div className="admin-title"><p>DATA SPEND CONTROL</p><h1>Provider health, cost containment, and usage</h1><span>Generated {new Date(metrics.generatedAt).toLocaleString()}</span></div>
     {error && <p className="admin-error">{error}</p>}
     <section className="admin-stat-row">{userStats.map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}</section>

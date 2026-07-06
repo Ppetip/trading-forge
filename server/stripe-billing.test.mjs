@@ -32,7 +32,7 @@ test("Stripe signature verification rejects tampering and stale events", () => {
   assert.throws(() => verifyStripeSignature(raw, `t=${timestamp},v1=${signature}`, config.webhookSecret, 2000), /expired/);
 });
 
-test("Stripe subscription events update entitlements idempotently", () => {
+test("Stripe subscription events update entitlements idempotently", async () => {
   const db = createDatabase(":memory:");
   const createdAt = new Date().toISOString();
   db.prepare("INSERT INTO users (id, email, password_hash, display_name, created_at, updated_at) VALUES (?, ?, 'x', 'Trader', ?, ?)").run(account.id, account.email, createdAt, createdAt);
@@ -41,11 +41,11 @@ test("Stripe subscription events update entitlements idempotently", () => {
     id: "evt_checkout", type: "checkout.session.completed",
     data: { object: { client_reference_id: account.id, customer: "cus_1", subscription: "sub_1", metadata: {} } }
   };
-  const first = applyStripeEvent(db, event);
+  const first = await applyStripeEvent(db, event);
   assert.equal(first.plan, "pro");
   assert.equal(db.prepare("SELECT plan FROM subscriptions WHERE user_id = ?").get(account.id).plan, "pro");
-  assert.equal(applyStripeEvent(db, event).duplicate, true);
-  const canceled = applyStripeEvent(db, {
+  assert.equal((await applyStripeEvent(db, event)).duplicate, true);
+  const canceled = await applyStripeEvent(db, {
     id: "evt_deleted", type: "customer.subscription.deleted",
     data: { object: { id: "sub_1", customer: "cus_1", status: "canceled", metadata: { edgelab_user_id: account.id } } }
   });

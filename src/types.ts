@@ -24,7 +24,7 @@ export interface StrategyRules {
   market: "Futures";
   symbol: string;
   timeframe: "1m" | "5m" | "15m";
-  dateRange: "6m" | "1y" | "3y" | "5y";
+  dateRange: "30d" | "60d" | "6m" | "1y" | "3y" | "5y";
   sessionTime: string;
   timezone: string;
   openingRangeMinutes: 5 | 15 | 30 | 60;

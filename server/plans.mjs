@@ -16,15 +16,15 @@ export function monthStart(now = new Date()) {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 }
 
-export function usageFor(db, userId, eventType, now = new Date()) {
-  return Number(db.prepare("SELECT COALESCE(SUM(quantity), 0) AS total FROM usage_events WHERE user_id = ? AND event_type = ? AND created_at >= ?")
-    .get(userId, eventType, monthStart(now)).total);
+export async function usageFor(db, userId, eventType, now = new Date()) {
+  return Number((await db.prepare("SELECT COALESCE(SUM(quantity), 0) AS total FROM usage_events WHERE user_id = ? AND event_type = ? AND created_at >= ?")
+    .get(userId, eventType, monthStart(now))).total);
 }
 
-export function assertUsage(db, account, eventType, limitName, now = new Date()) {
+export async function assertUsage(db, account, eventType, limitName, now = new Date()) {
   const plan = effectivePlan(account, now);
   const limit = PLAN_LIMITS[plan][limitName];
-  const used = usageFor(db, account.id, eventType, now);
+  const used = await usageFor(db, account.id, eventType, now);
   if (used >= limit) {
     const error = new Error(`${limitName} limit reached for the ${plan} plan.`);
     error.status = 402;
@@ -35,9 +35,9 @@ export function assertUsage(db, account, eventType, limitName, now = new Date())
   return { plan, limit, used, remaining: limit - used };
 }
 
-export function recordUsage(db, userId, eventType, metadata = null, quantity = 1, now = new Date()) {
+export async function recordUsage(db, userId, eventType, metadata = null, quantity = 1, now = new Date()) {
   const { randomUUID } = awaitImportCrypto();
-  db.prepare("INSERT INTO usage_events (id, user_id, event_type, quantity, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+  await db.prepare("INSERT INTO usage_events (id, user_id, event_type, quantity, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?)")
     .run(randomUUID(), userId, eventType, quantity, metadata ? JSON.stringify(metadata) : null, now.toISOString());
 }
 
@@ -45,20 +45,20 @@ function awaitImportCrypto() {
   return globalThis.__edgelabCrypto ??= { randomUUID: () => crypto.randomUUID() };
 }
 
-export function accountUsage(db, account, now = new Date()) {
+export async function accountUsage(db, account, now = new Date()) {
   const plan = effectivePlan(account, now);
   const limits = PLAN_LIMITS[plan];
   return {
     plan,
     limits,
     used: {
-      backtests: usageFor(db, account.id, "backtest", now),
-      pineExports: usageFor(db, account.id, "pine_export", now),
-      transcriptExtractions: usageFor(db, account.id, "transcript_extraction", now),
-      comparisons: usageFor(db, account.id, "comparison", now),
-      aiReportReviews: usageFor(db, account.id, "ai_report_review", now),
-      premiumDataBacktests: usageFor(db, account.id, "premium_data_backtest", now),
-      newPremiumWindows: usageFor(db, account.id, "premium_data_window", now),
+      backtests: await usageFor(db, account.id, "backtest", now),
+      pineExports: await usageFor(db, account.id, "pine_export", now),
+      transcriptExtractions: await usageFor(db, account.id, "transcript_extraction", now),
+      comparisons: await usageFor(db, account.id, "comparison", now),
+      aiReportReviews: await usageFor(db, account.id, "ai_report_review", now),
+      premiumDataBacktests: await usageFor(db, account.id, "premium_data_backtest", now),
+      newPremiumWindows: await usageFor(db, account.id, "premium_data_window", now),
     },
   };
 }

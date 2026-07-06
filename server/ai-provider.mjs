@@ -1,5 +1,7 @@
-export const AI_MODELS = Object.freeze({
+﻿export const AI_MODELS = Object.freeze({
   preflightClassifier: process.env.OPENROUTER_PREFLIGHT_MODEL ?? "openai/gpt-5.4-nano",
+  strategyParser: process.env.OPENROUTER_PARSER_MODEL ?? "google/gemini-2.5-flash-lite",
+  reportReview: process.env.OPENROUTER_REVIEW_MODEL ?? "google/gemini-2.5-flash-lite",
   preflightFallback: "google/gemini-2.5-flash-lite"
 });
 

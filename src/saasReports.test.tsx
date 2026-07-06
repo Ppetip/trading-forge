@@ -1,4 +1,4 @@
-﻿import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SaaSReports from "./SaaSReports";
 
@@ -67,16 +67,25 @@ describe("server report pages", () => {
     expect(screen.getByText(/1 trades/)).toBeTruthy();
   });
 
+  it("hides raw audit diagnostics and trade tape from non-admin users", async () => {
+    vi.stubGlobal("fetch", vi.fn((path: string) => path === "/api/account" ? response({ account: { role: "user" } }) : response({ report })));
+    render(<SaaSReports reportId="report-1" />);
+    expect(await screen.findByText("Exact tested rules")).toBeTruthy();
+    expect(screen.queryByText("Trade tape debug view")).toBeNull();
+    expect(document.querySelector(".report-audit")).toBeNull();
+  });
+
   it("renders exact rules, warnings, charts, and the trade log", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => response({ report })));
+    vi.stubGlobal("fetch", vi.fn((path: string) => path === "/api/account" ? response({ account: { role: "admin" } }) : response({ report })));
     const view = render(<SaaSReports reportId="report-1" />);
     expect(await screen.findByText("Exact tested rules")).toBeTruthy();
     expect(screen.getByText("Small sample warning.")).toBeTruthy();
     expect(screen.getByText("Trade log")).toBeTruthy();
-    expect(screen.getByText("Trade tape debug view")).toBeTruthy();
+    expect(await screen.findByText("Trade tape debug view")).toBeTruthy();
     expect(screen.getAllByText("orb-v1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("long").length).toBeGreaterThan(0);
     expect(view.container.querySelectorAll(".saas-report-chart")).toHaveLength(2);
+    expect(view.container.querySelectorAll(".chart-tick").length).toBeGreaterThanOrEqual(6);
     expect(view.container.querySelector("pre")?.textContent).toContain('"same_bar_policy": "stop_first"');
   });
 });

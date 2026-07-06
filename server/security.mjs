@@ -58,20 +58,20 @@ function isAllowedWriteOrigin(origin, host) {
 }
 
 const identityHash = (email) => createHash("sha256").update(String(email).trim().toLowerCase()).digest("hex");
-export function assertLoginAllowed(db, email, at = new Date()) {
-  const row = db.prepare("SELECT * FROM login_attempts WHERE identity_hash = ?").get(identityHash(email));
+export async function assertLoginAllowed(db, email, at = new Date()) {
+  const row = await db.prepare("SELECT * FROM login_attempts WHERE identity_hash = ?").get(identityHash(email));
   if (row?.blocked_until && new Date(row.blocked_until) > at) {
     const error = new Error("Too many failed attempts. Try again later."); error.status = 429; error.code = "LOGIN_COOLDOWN";
     error.details = { retryAfterSeconds: Math.ceil((new Date(row.blocked_until) - at) / 1000) }; throw error;
   }
 }
-export function recordLoginFailure(db, email, at = new Date()) {
-  const key = identityHash(email), row = db.prepare("SELECT * FROM login_attempts WHERE identity_hash = ?").get(key);
+export async function recordLoginFailure(db, email, at = new Date()) {
+  const key = identityHash(email), row = await db.prepare("SELECT * FROM login_attempts WHERE identity_hash = ?").get(key);
   const windowExpired = !row || at - new Date(row.window_started_at) > 15 * 60_000;
   const count = windowExpired ? 1 : Number(row.failed_count) + 1;
   const blocked = count >= 5 ? new Date(at.getTime() + 15 * 60_000).toISOString() : null;
-  db.prepare("INSERT INTO login_attempts (identity_hash, failed_count, window_started_at, blocked_until) VALUES (?, ?, ?, ?) ON CONFLICT(identity_hash) DO UPDATE SET failed_count=excluded.failed_count, window_started_at=excluded.window_started_at, blocked_until=excluded.blocked_until")
+  await db.prepare("INSERT INTO login_attempts (identity_hash, failed_count, window_started_at, blocked_until) VALUES (?, ?, ?, ?) ON CONFLICT(identity_hash) DO UPDATE SET failed_count=excluded.failed_count, window_started_at=excluded.window_started_at, blocked_until=excluded.blocked_until")
     .run(key, count, windowExpired ? at.toISOString() : row.window_started_at, blocked);
 }
-export function clearLoginFailures(db, email) { db.prepare("DELETE FROM login_attempts WHERE identity_hash = ?").run(identityHash(email)); }
+export async function clearLoginFailures(db, email) { await db.prepare("DELETE FROM login_attempts WHERE identity_hash = ?").run(identityHash(email)); }
 export function resetRateLimitsForTests() { buckets.clear(); }

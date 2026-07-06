@@ -1,4 +1,4 @@
-﻿const SYMBOLS = ["NQ", "ES", "YM", "RTY", "CL", "GC", "6E", "BTC", "ETH", "SPY", "QQQ"];
+const SYMBOLS = ["NQ", "ES", "YM", "RTY", "CL", "GC", "6E", "BTC", "ETH", "SPY", "QQQ"];
 
 export function parseStrategyPrompt(prompt, defaults = {}) {
   const text = String(prompt ?? "").trim();
@@ -10,7 +10,7 @@ export function parseStrategyPrompt(prompt, defaults = {}) {
     lower.match(/(?:opening\s+range|orb)\D{0,12}(5|15|30|60)/)?.[1];
   const rewardRisk = lower.match(/1\s*[:/]\s*(\d+(?:\.\d+)?)/)?.[1] ?? lower.match(/(\d+(?:\.\d+)?)\s*r\b/)?.[1];
   const session = lower.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/);
-  let sessionTime = defaults.sessionTime ?? "08:00";
+  let sessionTime = defaults.sessionTime ?? "09:30";
   if (session) {
     let hour = Number(session[1]) % 12;
     if (session[3] === "pm") hour += 12;
@@ -19,11 +19,11 @@ export function parseStrategyPrompt(prompt, defaults = {}) {
   const years = lower.match(/\b(\d+)\s*years?\b/)?.[1];
   const namedDays = [["monday", "Monday"], ["tuesday", "Tuesday"], ["wednesday", "Wednesday"], ["thursday", "Thursday"], ["friday", "Friday"]].filter(([key]) => lower.includes(key)).map(([, label]) => label);
   const assumptions = [];
-  if (!timeframe) assumptions.push("Timeframe defaulted to 5-minute candles.");
+  if (!timeframe) assumptions.push("Timeframe defaulted to 15-minute candles.");
   if (!range) assumptions.push("Opening range defaulted to 15 minutes.");
-  if (!rewardRisk) assumptions.push("Reward/risk defaulted to 1:3.");
-  if (!session) assumptions.push("Session start defaulted to 08:00.");
-  if (!years) assumptions.push("Historical test window defaulted to the latest completed 1 year.");
+  if (!rewardRisk) assumptions.push("Reward/risk defaulted to 1:2.");
+  if (!session) assumptions.push("Session start defaulted to 09:30 America/New_York.");
+  if (!years) assumptions.push("Historical intraday window defaulted to the latest 30 days so it fits research-grade data limits.");
   if (!namedDays.length) assumptions.push("Test includes every eligible Monday through Friday; no weekday filter was requested.");
   const strategyType = lower.includes("opening range") || /\borb\b/.test(lower)
     ? "opening_range_breakout"
@@ -43,14 +43,14 @@ export function parseStrategyPrompt(prompt, defaults = {}) {
       strategyType,
       market: defaults.market ?? "Futures",
       symbol,
-      timeframe: `${timeframe ?? "5"}m`,
-      dateRange: years && Number(years) > 1 ? `${Math.min(4, Number(years))}y` : "1y",
+      timeframe: `${timeframe ?? "15"}m`,
+      dateRange: years ? (Number(years) > 1 ? `${Math.min(4, Number(years))}y` : "1y") : "30d",
       sessionTime,
       timezone: defaults.timezone ?? "America/New_York",
       openingRangeMinutes: Number(range ?? 15),
       entryRule: "break_above_or_below_range",
       stopRule: "opposite_side_of_range",
-      rewardRisk: Number(rewardRisk ?? 3),
+      rewardRisk: Number(rewardRisk ?? 2),
       direction: lower.includes("long only") ? "long_only" : lower.includes("short only") ? "short_only" : "long_and_short",
       maxTradesPerDay: 1,
       researchGoal: "Validate the stated rules across historical market conditions",

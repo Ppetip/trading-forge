@@ -1,12 +1,10 @@
 FROM node:22-alpine AS build
 WORKDIR /app
-RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN npx --yes pnpm@9.15.9 install --frozen-lockfile
 COPY index.html tsconfig*.json vite.config.ts ./
-COPY public ./public
 COPY src ./src
-RUN pnpm build
+RUN npx --yes pnpm@9.15.9 build
 
 FROM nginx:1.27-alpine
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf

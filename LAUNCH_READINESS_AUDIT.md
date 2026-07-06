@@ -32,6 +32,9 @@ EdgeLab should never present a backtest as verified evidence unless all of these
 - Route-specific JSON body limits replace the previous broad default.
 - Production mode can serve the built React app from `dist` on the same origin as `/api`.
 - The configured admin email can become admin during registration, not only at DB boot.
+- The customer-facing React bundle no longer imports or routes to the admin dashboard.
+- Admin APIs require an explicit ops flag and stay disabled on the public API by default.
+- A separate local admin app entry is available through `admin.html`, `pnpm dev:admin`, and `pnpm build:admin`.
 
 ## Verification already covered by tests
 
@@ -42,7 +45,7 @@ EdgeLab should never present a backtest as verified evidence unless all of these
 - Unsupported/unsafe data windows producing explicit warnings instead of fake reports.
 - Same-origin write protection.
 - Login cooldown after failed attempts.
-- Admin-only data kill switches.
+- Admin-only data kill switches when the separate ops API is explicitly enabled.
 - ORB known-answer tests:
   - no breakout = zero trades
   - long target = +3R
@@ -83,7 +86,7 @@ Result: all tests and type/build checks passed. Vite still reports a non-blockin
    - paywall modal on premium actions
    - public report share
    - private report rejection
-   - admin data controls
+   - admin data controls only through the separate local ops app/API
 6. Add stricter Content Security Policy once third-party scripts and payment redirects are final.
 7. Code-split the front-end routes if bundle size becomes a load-time problem.
 
@@ -101,3 +104,4 @@ node server\server.mjs
 
 The server will serve `/api/*` as JSON routes and non-API paths from the built React app.
 
+Keep `EDGELAB_ENABLE_ADMIN_API` unset or `false` on this public process. Use `pnpm server:admin` plus `pnpm dev:admin` from a trusted local machine for operational reports and kill switches.

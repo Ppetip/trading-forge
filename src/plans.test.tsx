@@ -28,10 +28,10 @@ describe("plans and entitlements UI", () => {
       return jsonResponse(404, { error: { message: "Not found" } });
     }));
     render(<SaaSPlans />);
-    expect(await screen.findByText("Start one-time trial")).toBeTruthy();
-    fireEvent.click(screen.getByText("Start one-time trial"));
+    expect(await screen.findByText("Start free trial")).toBeTruthy();
+    fireEvent.click(screen.getByText("Start free trial"));
     expect(await screen.findByText(/Trial active through/)).toBeTruthy();
-    expect(screen.getAllByText("Current").length).toBe(1);
+    expect(screen.getByText("Trial active")).toBeTruthy();
     expect(screen.getByText("0/20 exports this month")).toBeTruthy();
   });
 });

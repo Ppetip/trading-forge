@@ -11,7 +11,7 @@ This is the current-state source of truth for what exists, what is running, what
 
 The repository contains two overlapping experiences:
 
-1. **Server-backed SaaS** — accounts, Ollama clarification, Databento data, SQLite persistence, immutable reports, AI review/game planning, versions, sharing, plans, transcripts, and admin metrics.
+1. **Server-backed SaaS** — accounts, OpenRouter clarification, Databento data, SQLite persistence, immutable reports, AI review/game planning, versions, sharing, plans, transcripts, and admin metrics.
 2. **Local/demo research app** — browser-local strategies, runs, preferences, illustrative/uploaded candles, dashboard, comparisons, Pine generation, and several client-side engines.
 
 ### Active runtime
@@ -20,7 +20,7 @@ The repository contains two overlapping experiences:
 |---|---:|---|---|
 | Vite frontend | `127.0.0.1:5173` | `vite --host 127.0.0.1` | React UI and `/api` proxy |
 | EdgeLab API | `127.0.0.1:8787` | `node --env-file=.env server/server.mjs` | Auth, AI, data, engines, reports |
-| Ollama | `127.0.0.1:11434` | `ollama.exe serve` | Local inference |
+| OpenRouter | `https://openrouter.ai/api/v1/chat/completions` | `openrouter.exe serve` | Hosted inference |
 
 ### Current saved-state snapshot
 
@@ -48,7 +48,7 @@ Routing is hash-based in `src/Root.tsx`.
 | `#/plans` | `SaaSPlans` | Public view | Plans, trial, Stripe, Pine exports | Subscription/usage |
 | `#/samples` | `SaaSSamples` | Public | Templates, published reports, clone handoff | Temporary localStorage |
 | `#/transcripts` | `TranscriptBuilder` | Paid/auth | Notes/transcript extraction | SQLite source + usage |
-| `#/admin` | `AdminDashboard` | Admin | Product/usage/business metrics | Read-only |
+| `admin.html` local ops app | `AdminDashboard` | Trusted local/admin process | Product/usage/business metrics and data controls | Admin API enabled explicitly |
 | `#/saas-reports` | `SaaSReports` | Auth | Latest full report plus History | Reports + AI usage |
 | `#/saas-reports/:id` | `SaaSReports` | Owner/auth | Specific immutable report | Visibility only |
 | `#/shared-reports/:id` | `SaaSReports` | Public if shared | Read-only public report | None |
@@ -86,7 +86,7 @@ Owned reports include sharing, metrics, interactive equity/drawdown charts, exac
 
 ```mermaid
 flowchart LR
- A["Strategy prompt"] --> B["Ollama rule extraction"]
+ A["Strategy prompt"] --> B["OpenRouter rule extraction"]
  B --> C{"Objective and supported?"}
  C -- "Missing rules" --> D["Clarification warning"]
  C -- "Unsupported engine" --> E["Keep rules; explain gap"]
@@ -137,7 +137,7 @@ Report identity includes exact rules, engine parameters, candle fingerprint, and
 
 ### AI clarification
 
-- Ollama `/api/chat`, default `gemma3:12b`, JSON mode, low temperature.
+- OpenRouter `/api/chat`, default `gemma3:12b`, JSON mode, low temperature.
 - Deterministic baseline from `prompt-parser.mjs`.
 - Promotional prose is separated from executable rules.
 - Numeric rules override narrative phrases.
@@ -305,7 +305,7 @@ The AI can structure Bollinger + RSI + ATR rules, but a dedicated server engine 
 | POST | `/api/billing/portal` | Stripe portal |
 | POST | `/api/billing/stripe-webhook` | Stripe lifecycle |
 | POST | `/api/billing/webhook` | Legacy signed event |
-| GET | `/api/admin/metrics` | Admin-only metrics |
+| GET | `/api/admin/metrics` | Admin-only metrics; disabled unless the separate ops API is explicitly enabled |
 
 ## 8. Billing and transcripts
 
@@ -358,7 +358,7 @@ Transcript sources: YouTube/video transcript, trading/course notes, Discord, and
 | `src/SaaSSamples.tsx` | Strategy packs and public results |
 | `src/DailyLevelWorkspace.tsx` | Previous-day strategy UI |
 | `src/TranscriptBuilder.tsx` | Transcript extraction UI |
-| `src/AdminDashboard.tsx` | Admin metrics UI |
+| `src/AdminDashboard.tsx` | Separate local ops metrics UI |
 | `src/App.tsx` | Local demo app and preferred sidebar/dashboard |
 | `src/StrategyLab.tsx` | Local multi-engine lab |
 | `src/RunArchive.tsx` | Local run history/detail |
@@ -416,8 +416,8 @@ Transcript sources: YouTube/video transcript, trading/course notes, Discord, and
 | File | Role |
 |---|---|
 | `server/prompt-parser.mjs` | Deterministic rules/defaults |
-| `server/ollama-parser.mjs` | AI structured extraction |
-| `server/ollama-review.mjs` | Grounded report AI |
+| `server/openrouter-parser.mjs` | AI structured extraction |
+| `server/openrouter-review.mjs` | Grounded report AI |
 | `server/databento.mjs` | Historical data, routing, disk cache |
 | `server/orb-engine.mjs` | Server ORB engine |
 | `server/daily-level-engine.mjs` | Daily-level engine |
@@ -472,7 +472,7 @@ Active local variable names:
 
 - `PORT`, `HOST`, `NODE_ENV`
 - `EDGELAB_DB_PATH`, `EDGELAB_APP_URL`
-- `OLLAMA_URL`, `OLLAMA_MODEL`
+- `OPENROUTER_API_KEY`, `OPENROUTER_PREFLIGHT_MODEL`, `OPENROUTER_PARSER_MODEL`, `OPENROUTER_REVIEW_MODEL`
 - `DATABENTO_API_KEY`
 
 Additional supported names:
@@ -517,14 +517,14 @@ The repository has two principal automated test groups: frontend/application beh
 - End-to-end registration, login, plan selection, backtest, save, reopen, iterate, and publish flows.
 - Multi-month and multi-year Databento stitching with overlaps, gaps, partial months, and upstream failures.
 - Cache reuse across API restarts and concurrent requests for the same symbol/window.
-- Ollama unavailable, model missing, malformed JSON, timeout, and retry behavior.
+- OpenRouter unavailable, model missing, malformed JSON, timeout, and retry behavior.
 - Negative metric coloring and chart interaction accessibility.
 - Stripe webhook replay/idempotency and entitlement changes.
 - Container startup with persistent SQLite and market-data volumes.
 
 ### Practical verification commands
 
-Use the package scripts documented above for automated checks. For runtime verification, confirm the API health endpoint, load each canonical browser route, run one cached and one uncached backtest, reopen the saved report, and verify that Ollama—not a remote AI provider—produces clarification and review output.
+Use the package scripts documented above for automated checks. For runtime verification, confirm the API health endpoint, load each canonical browser route, run one cached and one uncached backtest, reopen the saved report, and verify that OpenRouter produces clarification and review output.
 ## 13. Deployment topology
 
 ```mermaid
@@ -532,7 +532,7 @@ flowchart LR
   Browser[Browser / Vite UI] -->|HTTP JSON + session cookie| API[Node HTTP API]
   API --> SQLite[(SQLite database)]
   API --> Cache[(Persistent market-data cache)]
-  API --> Ollama[Local Ollama service]
+  API --> OpenRouter[Hosted OpenRouter service]
   API --> Databento[Databento historical API]
   API --> Stripe[Stripe billing API]
   API --> YouTube[YouTube transcript sources]
@@ -543,12 +543,12 @@ flowchart LR
 - Vite serves the React application on `127.0.0.1:5173`.
 - The Node server serves JSON APIs on `127.0.0.1:8787`.
 - Vite proxies `/api` requests to the Node server.
-- Ollama runs separately on `127.0.0.1:11434` and handles strategy parsing and report analysis.
+- OpenRouter is called as a hosted AI provider and handles strategy parsing and report analysis.
 - SQLite and the market-data cache live on the local filesystem, so they survive normal server restarts.
 
 ### Container deployment
 
-`compose.yaml` defines separate web and API services plus a persistent SQLite volume. The current container definition is a useful starting point, but it is not yet a complete production topology because Ollama is external, cached market data needs its own persistent mount, and the Databento/Ollama variables are not fully represented in the compose configuration.
+`compose.yaml` defines separate web and API services plus a persistent SQLite volume. The current container definition is a useful starting point, but it is not yet a complete production topology because OpenRouter is external, cached market data needs its own persistent mount, and the Databento/OpenRouter variables are not fully represented in the compose configuration.
 
 ### Deployment strengths
 
@@ -561,7 +561,7 @@ flowchart LR
 
 - SQLite permits one primary writer and is not a multi-node database strategy.
 - There is no background job queue; long data downloads and backtests occupy an API request.
-- Ollama availability and model installation are operational prerequisites.
+- OpenRouter availability and model installation are operational prerequisites.
 - The cache path must be mounted persistently in containers or downloaded history will be lost on replacement.
 - Production HTTPS, reverse proxying, log retention, monitoring, backups, and secret injection are not yet defined in this repository.
 
@@ -589,7 +589,7 @@ The server currently has dedicated opening-range and daily-level backtest paths,
 
 ### AI limitations
 
-- Ollama clarifies and reviews; it must not invent candles, trades, or performance.
+- OpenRouter clarifies and reviews; it must not invent candles, trades, or performance.
 - Vague narrative statements should become warnings or explicit assumptions, not automatic rejection when the prompt also contains objective rules.
 - The parser needs a stable supported-feature catalog so unsupported indicators and order behavior can be reported before data is downloaded.
 - Model output must remain schema-validated because even a well-prompted local model can return malformed or contradictory JSON.
@@ -622,7 +622,7 @@ Feature gates exist in plan-limit configuration, but every paid capability must 
 - Keep `.env` untracked and use secret injection in production.
 - Add request-size limits, rate limiting, structured logs, and correlation IDs.
 - Back up both the SQLite database and market-data cache; a database-only backup cannot reproduce every cached dataset efficiently.
-- Add health checks for SQLite writability, Ollama reachability/model availability, and upstream market-data authentication.
+- Add health checks for SQLite writability, OpenRouter reachability/model availability, and upstream market-data authentication.
 
 ## 15. Recommended implementation order
 
@@ -647,8 +647,8 @@ Feature gates exist in plan-limit configuration, but every paid capability must 
 | HTTP routing and server orchestration | `server/server.mjs` |
 | Database schema and persistence | `server/db.mjs` |
 | Plan entitlements | `server/plans.mjs` |
-| AI clarification | `server/strategyParser.mjs` with Ollama |
-| AI report analysis | `server/aiReview.mjs` with Ollama |
+| AI clarification | `server/strategyParser.mjs` with OpenRouter |
+| AI report analysis | `server/aiReview.mjs` with OpenRouter |
 | Automatic historical data | `server/databento.mjs` |
 | Persistent historical cache | `server/marketDataCache.mjs` |
 | Opening-range calculations | `server/backtest.mjs` |
@@ -664,4 +664,6 @@ Feature gates exist in plan-limit configuration, but every paid capability must 
 Trading Forge is already more than a static prototype: it has account persistence, entitlements, automatic and cached market data, deterministic server backtests, saved reports, AI-assisted clarification, and AI report review. Its biggest architectural task is consolidation. The strongest path is to make the SaaS workspace the single easy, one-click entry point; keep assumptions visible; execute only supported objective rules; preserve every exact report; and progressively reveal the deeper comparison, iteration, transcript, and research tools.
 
 This document describes the repository and processes as observed on 2026-07-05. Runtime PIDs, database counts, cache size, and active ports are snapshots and will change as the application is used.
+
+
 

@@ -17,7 +17,7 @@ describe("educational sample strategy packs", () => {
     expect(screen.getByText("Common retail strategy pack")).toBeTruthy();
     expect(screen.getByText(/not official strategies/)).toBeTruthy();
     expect(screen.getByText(/may perform poorly/)).toBeTruthy();
-    expect(screen.getByText("8 AM ORB")).toBeTruthy();
+    expect(screen.getByText("QQQ 9:30 AM ORB")).toBeTruthy();
     expect(screen.getAllByText("ORB ENGINE READY")).toHaveLength(3);
     expect(screen.getAllByText("ENGINE ROADMAP")).toHaveLength(27);
   });

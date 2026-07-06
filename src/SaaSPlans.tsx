@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, Beaker, Check, Code2, Download, LockKeyhole } from "lucide-react";
 import { ApiError, saasApi, type ApiAccount } from "./saas-api";
 import { billingApi } from "./billing-api";
@@ -79,12 +79,13 @@ export default function SaaSPlans() {
       {message && <div className="plans-alert success">{message}</div>}
       {error && <div className="plans-alert error">{error}</div>}
       <div className="plans-title"><p>PLANS & ENTITLEMENTS</p><h1>Pay for research capacity,<br />not trading hype.</h1><span>Limits fund compute, data, storage, and AI extraction. They do not imply better performance.</span></div>
-      <section className="plan-grid">
-        <Plan name="Free" price="$0" active={account?.plan === "free"} features={["5 backtests / month", "3 saved strategies", "3 saved reports", "Basic templates", "No transcript extraction or Pine exports"]} action={!account ? <a className="plan-signup" href="#/saas">Create free account <ArrowRight size={12} /></a> : undefined} />
-        <Plan name="Trial" price="14 days" active={account?.plan === "trial"} featured features={["50 backtests / month", "25 strategies", "50 reports", "20 Pine exports", "5 transcript extractions"]} action={account?.plan === "free" ? <button onClick={startTrial}>Start one-time trial</button> : !account ? <a className="plan-signup" href="#/saas">Sign up, then start trial <ArrowRight size={12} /></a> : undefined} />
-        <Plan name="Pro" price="Monthly" active={account?.plan === "pro"} features={["500 backtests / month", "250 strategies", "1,000 reports", "500 Pine exports", "100 transcript extractions"]} action={proAction} />
-      </section>
-      {account ? <section className="export-section"><div className="export-title"><div><p>SERVER-AUTHORIZED EXPORTS</p><h2>Saved report Pine Scripts</h2></div><span>{account.usage.used.pineExports}/{account.usage.limits.pineExports} exports this month</span></div>
+      <section className="trial-strip"><div><strong>Try the full workflow for 14 days</strong><span>50 backtests, AI reviews, comparisons, transcripts, Pine exports, and limited premium data.</span></div>{account?.plan === "free" ? <button onClick={startTrial}>Start free trial</button> : !account ? <a href="#/saas">Create account</a> : <em>{account.plan === "trial" ? "Trial active" : `${account.plan} plan active`}</em>}</section>
+      <section className="plan-grid plan-grid-four">
+        <Plan name="Free" price="$0" cadence="forever" active={account?.plan === "free"} features={["5 backtests / month", "Research-grade stocks & ETFs", "30-day intraday window", "3 saved reports", "No premium data pulls"]} action={!account ? <a className="plan-signup" href="#/saas">Start free <ArrowRight size={12} /></a> : undefined} />
+        <Plan name="Starter" price="$9" cadence="per month" active={account?.plan === "starter"} features={["100 backtests / month", "50 saved reports", "AI report review", "Transcript extraction", "Research-grade data only"]} action={<a className="plan-signup" href="mailto:support@edgelab.app?subject=EdgeLab Starter">Choose Starter <ArrowRight size={12} /></a>} />
+        <Plan name="Pro" price="$29" cadence="per month" active={account?.plan === "pro"} featured features={["500 backtests / month", "100 premium-data runs", "20 new premium windows", "Comparisons & Pine exports", "Futures and longer intraday tests"]} action={proAction} />
+        <Plan name="Power" price="$79" cadence="per month" active={account?.plan === "power"} features={["2,000 backtests / month", "500 premium-data runs", "100 new premium windows", "Large batch research", "Priority data capacity"]} action={<a className="plan-signup" href="mailto:support@edgelab.app?subject=EdgeLab Power">Choose Power <ArrowRight size={12} /></a>} />
+      </section>      {account ? <section className="export-section"><div className="export-title"><div><p>SERVER-AUTHORIZED EXPORTS</p><h2>Saved report Pine Scripts</h2></div><span>{account.usage.used.pineExports}/{account.usage.limits.pineExports} exports this month</span></div>
         {reports.length ? <div className="export-list">{reports.map((report) => { const rules = report.rules as { name?: string; symbol?: string; timeframe?: string; strategyType?: string }; return <article key={String(report.id)}><div><Code2 /><span><strong>{rules.name ?? "Untitled report"}</strong><small>{rules.symbol} · {rules.timeframe} · {rules.strategyType?.replaceAll("_", " ")}</small></span></div><button onClick={() => exportPine(String(report.id))} disabled={rules.strategyType !== "opening_range_breakout"}><Download size={13} />{rules.strategyType === "opening_range_breakout" ? "Export" : "Not available"}</button></article>; })}</div> : <div className="export-empty">Run and save an ORB backtest before exporting Pine Script.</div>}
       </section> : <section className="public-plan-entry"><LockKeyhole /><div><strong>Ready to begin?</strong><span>Create an account or sign in after choosing the plan that fits.</span></div><a href="#/saas">Create account or sign in <ArrowRight size={12} /></a></section>}
       <footer><p>Stripe controls payment details. EdgeLab changes entitlements only after a timestamp-verified signed webhook.</p></footer>
@@ -92,8 +93,8 @@ export default function SaaSPlans() {
   </div>;
 }
 
-function Plan({ name, price, features, active, featured, action }: { name: string; price: string; features: string[]; active: boolean; featured?: boolean; action?: React.ReactNode }) {
-  return <article className={`plan-card ${featured ? "featured" : ""}`}><div><span>{name.toUpperCase()}</span>{active && <em>Current</em>}</div><h2>{price}</h2><ul>{features.map((feature) => <li key={feature}><Check size={12} />{feature}</li>)}</ul>{action}</article>;
+function Plan({ name, price, cadence, features, active, featured, action }: { name: string; price: string; cadence: string; features: string[]; active: boolean; featured?: boolean; action?: React.ReactNode }) {
+  return <article className={`plan-card ${featured ? "featured" : ""}`}><div><span>{name.toUpperCase()}</span>{active && <em>Current</em>}</div><h2>{price}<small>{cadence}</small></h2><ul>{features.map((feature) => <li key={feature}><Check size={12} />{feature}</li>)}</ul>{action}</article>;
 }
 
 

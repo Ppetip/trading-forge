@@ -23,17 +23,17 @@ export async function verifyPassword(password, encoded) {
 
 export const tokenHash = (token) => createHash("sha256").update(token).digest("hex");
 
-export function createSession(db, userId, now = new Date()) {
+export async function createSession(db, userId, now = new Date()) {
   const token = randomBytes(32).toString("base64url");
   const expires = new Date(now.getTime() + SESSION_DAYS * 86400000);
-  db.prepare("INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)")
+  await db.prepare("INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)")
     .run(randomUUID(), userId, tokenHash(token), expires.toISOString(), now.toISOString(), now.toISOString());
   return { token, expires };
 }
 
-export function readSession(db, token, now = new Date()) {
+export async function readSession(db, token, now = new Date()) {
   if (!token) return null;
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT u.id, u.email, u.display_name, u.role, s.id AS session_id, s.expires_at,
            COALESCE(sub.plan, 'free') AS plan, COALESCE(sub.status, 'active') AS subscription_status,
            sub.trial_ends_at, sub.current_period_ends_at
@@ -43,7 +43,7 @@ export function readSession(db, token, now = new Date()) {
     WHERE s.token_hash = ? AND s.expires_at > ?
   `).get(tokenHash(token), now.toISOString());
   if (!row) return null;
-  db.prepare("UPDATE sessions SET last_seen_at = ? WHERE id = ?").run(now.toISOString(), row.session_id);
+  await db.prepare("UPDATE sessions SET last_seen_at = ? WHERE id = ?").run(now.toISOString(), row.session_id);
   return row;
 }
 

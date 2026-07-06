@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, BarChart3, Beaker, BookOpen, Check, Clock3, Copy, Sparkles } from "lucide-react";
 import { saasApi } from "./saas-api";
 import { SAMPLE_STRATEGIES, type SampleStrategy } from "./sample-strategies";
@@ -23,12 +23,13 @@ function cloneSample(strategy: SampleStrategy, report?: PublicReport) {
 }
 
 function Pack({ title, note, strategies, reports, openPaywall }: { title: string; note: string; strategies: SampleStrategy[]; reports: PublicReport[]; openPaywall: (info: PaywallInfo) => void }) {
-  return <section className="sample-pack"><div className="sample-pack-title"><div><p>15 EDUCATIONAL TEMPLATES</p><h2>{title}</h2><span>{note}</span></div><b>{strategies.length}</b></div><div className="sample-grid">{strategies.map((strategy) => {
+  const ranked = [...strategies].sort((a, b) => { const ar = reportFor(a, reports), br = reportFor(b, reports); const score = (item?: PublicReport) => item ? (Number(item.result.totalR) > 0 ? 4 : 3) : 0; return score(br) - score(ar); });
+  return <section className="sample-pack"><div className="sample-pack-title"><div><p>15 EDUCATIONAL TEMPLATES</p><h2>{title}</h2><span>{note}</span></div><b>{strategies.length}</b></div><div className="sample-grid">{ranked.map((strategy) => {
     const report = reportFor(strategy, reports);
     const tierLabel = strategy.tier === "ready" ? "One-click ready" : strategy.tier === "pro" ? "Pro research idea" : "Clarify first";
     return <article className={report ? "sample-result-card" : `sample-tier-${strategy.tier}`} key={strategy.id}>
       <div><BookOpen size={13} /><span>{report ? report.result.audit?.verification?.label ?? "UNVERIFIED LEGACY REPORT" : strategy.engine === "available" ? "ORB ENGINE READY" : "ENGINE ROADMAP"}</span><em>{tierLabel}</em></div>
-      <h3>{strategy.name}</h3><p>{strategy.concept}</p>
+      <h3>{strategy.name}</h3>{report && <b className={`sample-pin ${Number(report.result.totalR) > 0 ? "winner" : "caution"}`}>{Number(report.result.totalR) > 0 ? "PINNED · POSITIVE BASELINE" : "PINNED · CAUTIONARY BASELINE"}</b>}<p>{strategy.concept}</p>
       {report && <div className="sample-evidence"><strong className={Number(report.result.totalR) < 0 ? "negative" : "positive"}>{formatR(Number(report.result.totalR))}</strong><span>{Number(report.result.winRate ?? 0).toFixed(1)}% win · {(report.result.trades ?? []).length} trades</span></div>}
       {!report && <div className="sample-plan"><span>Next step</span><strong>{strategy.tier === "ready" ? "Run an ORB baseline, then save the result." : strategy.tier === "pro" ? "Define missing indicators and data needs before testing." : "Use dropdown assumptions to make rules objective."}</strong></div>}
       <footer>{report ? <><a href={`#/shared-reports/${encodeURIComponent(report.id)}`}><BarChart3 size={12} />View result</a><button onClick={() => cloneSample(strategy, report)}><Copy size={12} />Clone & tweak</button><button className="paid-action" onClick={() => openPaywall({ title: "AI strategy chat is paid", message: "Asking AI to review a published strategy or plan variations uses report-aware model calls, so it is reserved for paid workflows.", options: ["Upgrade to ask AI about reports", "Clone and tweak manually", "Open the shared report without AI"], primaryHref: "#/account", primaryLabel: "View plans" })}><Sparkles size={12} />Ask AI · paid</button></> : <><button onClick={() => cloneSample(strategy)}>{strategy.engine === "available" ? <Check size={12} /> : <Clock3 size={12} />}{strategy.engine === "available" ? "Open runnable draft" : "Clarify draft"}</button><span>{strategy.engine === "roadmap" ? "No fake result shown" : "Ready for server ORB"}</span></>}</footer>

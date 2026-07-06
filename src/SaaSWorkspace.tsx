@@ -44,15 +44,15 @@ type PreflightClassification = {
 };
 
 const defaults: StrategyRules = {
-  name: "NQ 8:00 Opening Range", strategyType: "opening_range_breakout", market: "Futures",
-  symbol: "NQ", timeframe: "5m", dateRange: "1y", sessionTime: "08:00",
+  name: "SPY 9:30 Opening Range", strategyType: "opening_range_breakout", market: "Futures",
+  symbol: "SPY", timeframe: "15m", dateRange: "30d", sessionTime: "09:30",
   timezone: "America/New_York", openingRangeMinutes: 15, entryRule: "break_above_or_below_range",
-  stopRule: "opposite_side_of_range", rewardRisk: 3, direction: "long_and_short",
+  stopRule: "opposite_side_of_range", rewardRisk: 2, direction: "long_and_short",
   maxTradesPerDay: 1, fees: true, slippage: true
 };
 
 const formatR = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}R`;
-const yearsFor = (range: StrategyRules["dateRange"]) => ({ "6m": 0.5, "1y": 1, "3y": 3, "5y": 5 })[range] ?? 1;
+const yearsFor = (range: StrategyRules["dateRange"]) => ({ "30d": 30 / 365, "60d": 60 / 365, "6m": 0.5, "1y": 1, "3y": 3, "5y": 5 })[range] ?? 1;
 const hasPremiumData = (plan: ApiAccount["plan"]) => plan === "trial" || plan === "pro" || plan === "power";
 const cleanLabel = (value: string) => value.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
@@ -75,7 +75,7 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
   const [loadingAccount, setLoadingAccount] = useState(true);
   const [page, setPage] = useState<SaaSPage>(initialPage);
   const [rules, setRules] = useState<StrategyRules>(() => { try { return JSON.parse(window.localStorage.getItem("edgelab.iterateRules") || "null") || defaults; } catch { return defaults; } });
-  const [prompt, setPrompt] = useState(() => window.localStorage.getItem("edgelab.iteratePrompt") || window.localStorage.getItem("edgelab.samplePrompt") || "Test the 8 AM opening range breakout on NQ. Use a 15-minute range and 1:3 risk reward.");
+  const [prompt, setPrompt] = useState(() => window.localStorage.getItem("edgelab.iteratePrompt") || window.localStorage.getItem("edgelab.samplePrompt") || "Test the 9:30 AM opening range breakout on SPY using 15-minute candles and a 15-minute range. Stop at the other side of the range and take profit at 2R.");
   const [assumptions, setAssumptions] = useState<string[]>([]);
   const [readiness, setReadiness] = useState<StrategyReadiness>(STRATEGY_READINESS.READY_TO_BACKTEST);
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -157,14 +157,14 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
     const next: StrategyRules = {
       ...rules,
       strategyType: "opening_range_breakout" as const,
-      symbol: rules.symbol || "NQ",
-      timeframe: rules.timeframe || "5m",
-      dateRange: rules.dateRange || "1y",
-      sessionTime: rules.sessionTime || "08:00",
+      symbol: rules.symbol || "SPY",
+      timeframe: rules.timeframe || "15m",
+      dateRange: rules.dateRange || "30d",
+      sessionTime: rules.sessionTime || "09:30",
       timezone: rules.timezone || "America/New_York",
       openingRangeMinutes: rules.openingRangeMinutes || 15,
       stopRule: "opposite_side_of_range" as const,
-      rewardRisk: rules.rewardRisk || 3,
+      rewardRisk: rules.rewardRisk || 2,
       maxTradesPerDay: 1,
       fees: true,
       slippage: true
@@ -276,7 +276,6 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
       <a className="saas-nav-link" href="#/templates"><BookOpen size={16} />Strategy Packs</a>
       <a className="saas-nav-link" href="#/transcripts"><Sparkles size={16} />Extract from Video/Notes</a>
       <a className="saas-nav-link" href="#/account"><UserRound size={16} />Account & Pricing</a>
-      {account.role === "admin" && <a className="saas-nav-link admin" href="#/admin"><Sparkles size={16} />Data Spend Control</a>}
       <div className="saas-plan"><span>{account.plan.toUpperCase()} PLAN</span><strong>{account.usage.used.backtests}/{account.usage.limits.backtests}</strong><small>backtests this month</small><div><i style={{ width: `${Math.min(100, account.usage.used.backtests / Math.max(1, account.usage.limits.backtests) * 100)}%` }} /></div></div>
       <button className="logout" onClick={async () => { await saasApi.logout(); setAccount(null); }}><LogOut size={15} />Log out</button>
     </aside>
@@ -344,7 +343,7 @@ function WorkspaceWithPaywall(props: WorkspaceProps) {
     </section><aside className="saas-settings"><details className="advanced-settings"><summary>Advanced controls</summary><h2>Test settings</h2><p>Every setting becomes part of the cache key.</p>
       <label>Name<input value={rules.name} onChange={(event) => setRules({ ...rules, name: event.target.value })} /></label>
       <div className="field-row"><label>Symbol<input value={rules.symbol} onChange={(event) => setRules({ ...rules, symbol: event.target.value.toUpperCase() })} /></label><label>Timeframe<select value={rules.timeframe} onChange={(event) => setRules({ ...rules, timeframe: event.target.value as StrategyRules["timeframe"] })}><option>1m</option><option>5m</option><option>15m</option></select></label></div>
-      <label>Date range<select value={rules.dateRange} onChange={(event) => setRules({ ...rules, dateRange: event.target.value as StrategyRules["dateRange"] })}><option value="6m">6 months</option><option value="1y">1 year</option><option value="3y">3 years</option><option value="5y">5 years</option></select></label>
+      <label>Date range<select value={rules.dateRange} onChange={(event) => setRules({ ...rules, dateRange: event.target.value as StrategyRules["dateRange"] })}><option value="30d">30 days · Free intraday</option><option value="6m">6 months</option><option value="1y">1 year</option><option value="3y">3 years</option><option value="5y">5 years</option></select></label>
       {tierWarning && <div className="tier-warning"><strong>Premium data required</strong><span>{rules.dateRange} of {rules.timeframe} candles needs Pro premium data, a shorter window, or uploaded candles.</span></div>}
       <div className="field-row"><label>Session<input type="time" value={rules.sessionTime} onChange={(event) => setRules({ ...rules, sessionTime: event.target.value })} /></label><label>Range<select value={rules.openingRangeMinutes} onChange={(event) => setRules({ ...rules, openingRangeMinutes: Number(event.target.value) as StrategyRules["openingRangeMinutes"] })}><option value="5">5 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option></select></label></div>
       <label>Risk/reward comparison <small className="pro-badge">PRO</small><select value={props.comparison} onChange={(event) => { if (props.plan === "free" && event.target.value !== "single") openComparisonPaywall(); else props.setComparison(event.target.value); }}><option value="single">Single · 1:{rules.rewardRisk}</option><option value="2,3,4">Compare · 1:2 / 1:3 / 1:4</option></select></label>
@@ -362,13 +361,14 @@ function PreflightPanel({ preflight, onAddDefaults }: { preflight: PreflightClas
   const blocked = !preflight.shouldRunFullParser;
   const title = blocked ? "Needs one more step before parsing" : "Ready for rule extraction";
   const primaryReason = preflight.reasons[0] ?? "The prompt was classified before the full parser was allowed to spend tokens.";
+  const isAdminSupport = preflight.inputTier === "CODE_ADMIN_DEPLOYMENT";
   const routeHref = preflight.inputTier === "TRANSCRIPT_OR_NOTES" ? "#/transcripts"
     : preflight.inputTier === "REPORT_REVIEW" ? "#/reports"
-      : preflight.inputTier === "CODE_ADMIN_DEPLOYMENT" ? "#/admin"
+      : isAdminSupport ? null
         : "#/account";
   const routeLabel = preflight.inputTier === "TRANSCRIPT_OR_NOTES" ? "Open extractor"
     : preflight.inputTier === "REPORT_REVIEW" ? "Open reports"
-      : preflight.inputTier === "CODE_ADMIN_DEPLOYMENT" ? "Open admin"
+      : isAdminSupport ? "Use the local ops app"
         : "View data options";
   return <div className={blocked ? "preflight-panel blocked" : "preflight-panel ready"}>
     <div className="preflight-head"><div><span>AI PREFLIGHT · {Math.round(preflight.confidence * 100)}% confidence</span><h3>{title}</h3><p>{primaryReason}</p></div><strong>{cleanLabel(preflight.inputTier)}</strong></div>
@@ -384,7 +384,7 @@ function PreflightPanel({ preflight, onAddDefaults }: { preflight: PreflightClas
     </div>}
     <div className="preflight-actions">
       {preflight.inputTier === "STRATEGY_VAGUE" || preflight.inputTier === "UNSUPPORTED_OR_UNCLEAR" ? <button onClick={onAddDefaults}>Add common defaults</button> : null}
-      {preflight.inputTier === "LIVE_TRADE_ADVICE" ? <span>EdgeLab tests historical rules; it does not give live buy/sell calls.</span> : <a href={routeHref}>{routeLabel} <ArrowRight size={12} /></a>}
+      {preflight.inputTier === "LIVE_TRADE_ADVICE" ? <span>EdgeLab tests historical rules; it does not give live buy/sell calls.</span> : routeHref ? <a href={routeHref}>{routeLabel} <ArrowRight size={12} /></a> : <span>{routeLabel}</span>}
       <small>{preflight.fallbackUsed ? "Used deterministic fallback." : "Cheap AI classifier checked this prompt."}</small>
     </div>
   </div>;

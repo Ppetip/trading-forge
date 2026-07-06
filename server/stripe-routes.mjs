@@ -17,15 +17,15 @@ async function rawBody(request, limit = 1024 * 1024) {
 
 export async function handleStripeBilling({ pathname, method, request, response, db, stripeConfig, stripeFetch }) {
   if (pathname === "/api/billing/checkout" && method === "POST") {
-    const account = requireAuth(request, db);
-    const subscription = db.prepare("SELECT * FROM subscriptions WHERE user_id = ?").get(account.id);
+    const account = await requireAuth(request, db);
+    const subscription = await db.prepare("SELECT * FROM subscriptions WHERE user_id = ?").get(account.id);
     const session = await createStripeCheckout(account, subscription, stripeConfig, stripeFetch);
     send(response, 201, { session });
     return true;
   }
   if (pathname === "/api/billing/portal" && method === "POST") {
-    const account = requireAuth(request, db);
-    const subscription = db.prepare("SELECT * FROM subscriptions WHERE user_id = ?").get(account.id);
+    const account = await requireAuth(request, db);
+    const subscription = await db.prepare("SELECT * FROM subscriptions WHERE user_id = ?").get(account.id);
     const session = await createStripePortal(subscription, stripeConfig, stripeFetch);
     send(response, 201, { session });
     return true;
@@ -40,7 +40,7 @@ export async function handleStripeBilling({ pathname, method, request, response,
       error.status = 400; error.code = "BAD_REQUEST";
       throw error;
     }
-    send(response, 200, applyStripeEvent(db, event));
+    send(response, 200, await applyStripeEvent(db, event));
     return true;
   }
   return false;

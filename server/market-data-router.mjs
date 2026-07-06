@@ -1,4 +1,4 @@
-﻿import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fetchDatabentoCandles } from "./databento.mjs";
@@ -31,6 +31,8 @@ function requestedYearsRaw(rules) {
   if (yearMatch) return Number(yearMatch[1]);
   const monthMatch = text.match(/(\d+(?:\.\d+)?)\s*m/i);
   if (monthMatch) return Number(monthMatch[1]) / 12;
+  const dayMatch = text.match(/(\d+(?:\.\d+)?)\s*d/i);
+  if (dayMatch) return Number(dayMatch[1]) / 365;
   return 1;
 }
 function yahooInterval(timeframe) {
@@ -38,8 +40,8 @@ function yahooInterval(timeframe) {
 }
 function dateWindow(rules, now = new Date()) {
   const end = new Date(now), interval = yahooInterval(rules?.timeframe), intraday = interval !== "1d";
-  const maxDays = interval === "1m" ? 7 : 60, start = new Date(end);
-  if (intraday) start.setUTCDate(start.getUTCDate() - maxDays); else start.setUTCFullYear(start.getUTCFullYear() - requestedYears(rules));
+  const maxDays = interval === "1m" ? 7 : 59, start = new Date(end);
+  if (intraday) start.setUTCDate(start.getUTCDate() - Math.min(maxDays, requestedDays(rules))); else start.setUTCFullYear(start.getUTCFullYear() - requestedYears(rules));
   return { start, end, interval, intraday, maxDays };
 }
 function requestedDays(rules) { return Math.ceil(requestedYearsRaw(rules) * 365); }
@@ -92,7 +94,7 @@ export function estimateDataCost({ provider, cacheHit, estimatedCandles = 0, pro
 export async function routeMarketData({ db, account, rules, candles, fetchImpl = fetch, now = new Date(), preferredProvider }) {
   const requestedSymbol = normalizeSymbol(rules?.symbol), plan = effectivePlan(account, now);
   const rawYears = requestedYearsRaw(rules);
-  const controls = getDataControls(db);
+  const controls = await getDataControls(db);
   if (rawYears > 5) throw marketError("That backtest window is too large for an online on-demand run. Choose 5 years or less, upload your own candles, or split the test into smaller windows.",
     "UNREALISTIC_BACKTEST_WINDOW", 422, { requestedYears: rawYears, maxYears: 5, options: ["Choose a range of 5 years or less", "Upload your own candles", "Split the request into smaller backtests"] });
   if (controls.disableLongWindows && rawYears > 1) throw marketError("Long-window tests are temporarily disabled by admin data-spend controls. Choose one year or less, upload candles, or retry later.",
@@ -133,17 +135,17 @@ export async function routeMarketData({ db, account, rules, candles, fetchImpl =
       "DATA_CONTROL_DATABENTO_DISABLED", 503, { provider: "databento" });
     if (controls.cachedDatabentoOnly) throw marketError("Fresh premium market-data downloads are temporarily disabled. Cached premium reports can still be viewed, but new premium windows cannot run right now.",
       "DATA_CONTROL_DATABENTO_CACHED_ONLY", 503, { provider: "databento" });
-    assertUsage(db, account, "premium_data_backtest", "premiumDataBacktests", now);
+    await assertUsage(db, account, "premium_data_backtest", "premiumDataBacktests", now);
     const query = { provider: "databento", dataset: futureProxy ? "GLBX.MDP3" : "EQUS.MINI", requestedSymbol, resolvedSymbol: requestedSymbol,
       interval: String(rules.timeframe ?? "5m"), start: window.start.toISOString(), end: window.end.toISOString(), timezone: rules.timezone ?? "America/New_York",
       adjusted: false, continuous: Boolean(futureProxy) };
-    recordUsage(db, account.id, "data_request_started", query);
+    await recordUsage(db, account.id, "data_request_started", query);
     const result = await fetchDatabentoCandles(rules, { fetchImpl, returnMetadata: true });
-    if (result.downloads > 0) assertUsage(db, account, "premium_data_window", "newPremiumWindows", now);
-    recordUsage(db, account.id, result.downloads > 0 ? "data_provider_fetch" : "data_cache_hit", { ...query, rowsReturned: result.candles.length,
+    if (result.downloads > 0) await assertUsage(db, account, "premium_data_window", "newPremiumWindows", now);
+    await recordUsage(db, account.id, result.downloads > 0 ? "data_provider_fetch" : "data_cache_hit", { ...query, rowsReturned: result.candles.length,
       providerCalls: result.providerCalls, cacheHit: result.downloads === 0 });
-    if (result.downloads > 0) recordUsage(db, account.id, "premium_data_window", query);
-    recordUsage(db, account.id, "premium_data_backtest", query);
+    if (result.downloads > 0) await recordUsage(db, account.id, "premium_data_window", query);
+    await recordUsage(db, account.id, "premium_data_backtest", query);
     const costScore = estimateDataCost({ provider: "databento", cacheHit: result.downloads === 0, estimatedCandles: result.candles.length, providerCalls: result.providerCalls });
     return { candles: result.candles, dataProvenance: provenance(query, { cacheHit: result.downloads === 0, providerCalls: result.providerCalls, costScore }), cacheKey: null };
   }
@@ -154,18 +156,18 @@ export async function routeMarketData({ db, account, rules, candles, fetchImpl =
   const query = { provider: "yahoo", dataset: "chart", requestedSymbol, resolvedSymbol, interval: window.interval, start: window.start.toISOString(),
     end: window.end.toISOString(), timezone: rules.timezone ?? "America/New_York", adjusted: true, continuous: false };
   const identity = cacheIdentity(query), cached = await readCache(identity);
-  recordUsage(db, account.id, "data_request_started", query);
+  await recordUsage(db, account.id, "data_request_started", query);
   if (cached) {
-    recordUsage(db, account.id, "data_cache_hit", { ...query, cacheKey: cachePath(identity), rowsReturned: cached.candles.length });
+    await recordUsage(db, account.id, "data_cache_hit", { ...query, cacheKey: cachePath(identity), rowsReturned: cached.candles.length });
     return { candles: cached.candles, dataProvenance: provenance(query, { cacheHit: true }), cacheKey: cachePath(identity) };
   }
-  recordUsage(db, account.id, "data_cache_miss", query);
+  await recordUsage(db, account.id, "data_cache_miss", query);
   let result;
   try { result = await fetchYahoo(query, fetchImpl); }
-  catch (error) { recordUsage(db, account.id, "data_provider_error", { ...query, errorCode: error.code ?? "RESEARCH_DATA_FAILED" }); throw error; }
+  catch (error) { await recordUsage(db, account.id, "data_provider_error", { ...query, errorCode: error.code ?? "RESEARCH_DATA_FAILED" }); throw error; }
   await writeCache(identity, result.candles, result.metadata);
-  recordUsage(db, account.id, "data_provider_fetch", { ...query, rowsReturned: result.candles.length, providerCalls: 1 });
-  if (futureProxy) recordUsage(db, account.id, "proxy_symbol_used", query);
+  await recordUsage(db, account.id, "data_provider_fetch", { ...query, rowsReturned: result.candles.length, providerCalls: 1 });
+  if (futureProxy) await recordUsage(db, account.id, "proxy_symbol_used", query);
   return { candles: result.candles, dataProvenance: provenance(query, { providerCalls: 1,
     costScore: estimateDataCost({ provider: "yahoo", estimatedCandles: result.candles.length, providerCalls: 1 }) }), cacheKey: cachePath(identity) };
 }

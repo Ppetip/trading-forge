@@ -1,8 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { badRequest } from "./validation.mjs";
 
-export function startTrial(db, account, now = new Date(), days = 14) {
-  const subscription = db.prepare("SELECT * FROM subscriptions WHERE user_id = ?").get(account.id);
+export async function startTrial(db, account, now = new Date(), days = 14) {
+  const subscription = await db.prepare("SELECT * FROM subscriptions WHERE user_id = ?").get(account.id);
   if (subscription.plan !== "free" || subscription.trial_ends_at) {
     const error = new Error("This account has already used its trial or has an active plan.");
     error.status = 409;
@@ -10,7 +10,7 @@ export function startTrial(db, account, now = new Date(), days = 14) {
     throw error;
   }
   const trialEndsAt = new Date(now.getTime() + days * 86400000).toISOString();
-  db.prepare("UPDATE subscriptions SET plan = 'trial', status = 'trialing', trial_ends_at = ?, current_period_ends_at = ?, updated_at = ? WHERE user_id = ?")
+  await db.prepare("UPDATE subscriptions SET plan = 'trial', status = 'trialing', trial_ends_at = ?, current_period_ends_at = ?, updated_at = ? WHERE user_id = ?")
     .run(trialEndsAt, trialEndsAt, now.toISOString(), account.id);
   return { plan: "trial", status: "trialing", trialEndsAt };
 }
@@ -32,13 +32,13 @@ export function verifyWebhook(rawBody, signature, secret) {
   }
 }
 
-export function applySubscriptionEvent(db, event, now = new Date()) {
+export async function applySubscriptionEvent(db, event, now = new Date()) {
   if (!event || event.type !== "subscription.updated") throw badRequest("Unsupported billing event.");
   const data = event.data;
   if (!data?.userId || !["free", "trial", "pro"].includes(data.plan) || !["active", "trialing", "past_due", "canceled"].includes(data.status)) {
     throw badRequest("Billing event data is invalid.");
   }
-  const result = db.prepare(`
+  const result = await db.prepare(`
     UPDATE subscriptions
     SET plan = ?, status = ?, provider_customer_id = ?, provider_subscription_id = ?,
         current_period_ends_at = ?, updated_at = ?

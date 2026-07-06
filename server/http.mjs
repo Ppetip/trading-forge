@@ -34,9 +34,9 @@ export async function readJson(request, limit = 25 * 1024 * 1024) {
   }
 }
 
-export function requireAuth(request, db) {
+export async function requireAuth(request, db) {
   const token = parseCookies(request.headers.cookie).edgelab_session;
-  const account = readSession(db, token);
+  const account = await readSession(db, token);
   if (!account) {
     const error = new Error("Authentication required.");
     error.status = 401;

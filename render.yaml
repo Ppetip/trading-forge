@@ -1,0 +1,54 @@
+﻿services:
+  - type: web
+    name: edgelab
+    runtime: node
+    plan: starter
+    buildCommand: CI=true npx --yes pnpm@9.15.9 install --frozen-lockfile && npx --yes pnpm@9.15.9 build
+    startCommand: node server/server.mjs
+    healthCheckPath: /api/health
+    disk:
+      name: edgelab-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: HOST
+        value: 0.0.0.0
+      - key: EDGELAB_STATIC_DIR
+        value: dist
+      - key: EDGELAB_DB_PATH
+        value: /opt/render/project/src/data/edgelab.sqlite
+      - key: EDGELAB_DB_DRIVER
+        value: postgres
+      - key: DATABASE_URL
+        sync: false
+      - key: MARKET_DATA_CACHE_PATH
+        value: /opt/render/project/src/data/market-cache
+      - key: EDGELAB_ENABLE_ADMIN_API
+        value: "false"
+      - key: EDGELAB_APP_URL
+        sync: false
+      - key: EDGELAB_ADMIN_EMAIL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRO_PRICE_ID
+        sync: false
+      - key: EDGELAB_BILLING_WEBHOOK_SECRET
+        sync: false
+      - key: DATABENTO_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_PREFLIGHT_MODEL
+        value: openai/gpt-5.4-nano
+      - key: OPENROUTER_PARSER_MODEL
+        value: google/gemini-2.5-flash-lite
+      - key: OPENROUTER_REVIEW_MODEL
+        value: google/gemini-2.5-flash-lite
+

@@ -68,7 +68,7 @@ function summarize(rules: StrategyRules, trades: Trade[], dataSource: BacktestRe
 
 export function runDemoBacktest(rules: StrategyRules): BacktestResult {
   const random = seededRandom(hashRules(rules));
-  const years = { "6m": 0.5, "1y": 1, "3y": 3, "5y": 5 }[rules.dateRange];
+  const years = { "30d": 30 / 365, "60d": 60 / 365, "6m": 0.5, "1y": 1, "3y": 3, "5y": 5 }[rules.dateRange];
   const count = Math.round((48 + random() * 12) * years);
   const baseWinRate = Math.min(0.64, Math.max(0.2, 1 / (rules.rewardRisk + 0.72) + 0.08));
   const drag = (rules.fees ? 0.025 : 0) + (rules.slippage ? 0.035 : 0);

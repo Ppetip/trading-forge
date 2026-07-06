@@ -1,4 +1,4 @@
-﻿import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Root from "./Root";
 import App from "./App";
@@ -22,6 +22,17 @@ describe("EdgeLab research workflow", () => {
     await waitFor(() => expect(screen.getByText("Experimental local lab")).toBeTruthy());
     expect(screen.getByText("Choose the rule engine")).toBeTruthy();
     expect(screen.getByText("Parameters")).toBeTruthy();
+  });
+
+  it("shows the persistent product sidebar on global app pages but not on landing", async () => {
+    render(<Root />);
+    expect(screen.queryByText("Account & Pricing")).toBeNull();
+    window.location.hash = "#/account";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await waitFor(() => expect(screen.getByText("Account & Pricing")).toBeTruthy());
+    expect(screen.getByText("My Reports")).toBeTruthy();
+    expect(screen.getByText("Strategy Packs")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /global menu/i })).toBeNull();
   });
 
   it("runs and persists an exact strategy configuration", async () => {

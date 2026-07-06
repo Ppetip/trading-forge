@@ -18,12 +18,12 @@ function hydrate(row) {
   };
 }
 
-export function listTranscriptSources(db, userId) {
-  return db.prepare("SELECT * FROM transcript_sources WHERE user_id = ? ORDER BY created_at DESC LIMIT 100").all(userId).map(hydrate);
+export async function listTranscriptSources(db, userId) {
+  return (await db.prepare("SELECT * FROM transcript_sources WHERE user_id = ? ORDER BY created_at DESC LIMIT 100").all(userId)).map(hydrate);
 }
 
-export function createTranscriptSource(db, account, body) {
-  assertUsage(db, account, "transcript_extraction", "transcriptExtractions");
+export async function createTranscriptSource(db, account, body) {
+  await assertUsage(db, account, "transcript_extraction", "transcriptExtractions");
   const sourceType = String(body.sourceType ?? "");
   if (!SOURCE_TYPES.has(sourceType)) throw badRequest("Choose a supported transcript source type.");
   const content = String(body.content ?? "").trim();
@@ -62,12 +62,12 @@ export function createTranscriptSource(db, account, body) {
     warning: "Rules were extracted from user-provided text. Review every rule and assumption before testing."
   };
   const id = randomUUID(), createdAt = new Date().toISOString();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO transcript_sources (id, user_id, source_type, source_url, title, content, status, extracted_rules_json, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 'extracted', ?, ?)
   `).run(id, account.id, sourceType, sourceUrl, title, content, JSON.stringify(extraction), createdAt);
-  recordUsage(db, account.id, "transcript_upload", { sourceId: id, sourceType, characters: content.length });
-  recordUsage(db, account.id, "transcript_extraction", { sourceId: id, parser: parsed.parser });
+  await recordUsage(db, account.id, "transcript_upload", { sourceId: id, sourceType, characters: content.length });
+  await recordUsage(db, account.id, "transcript_extraction", { sourceId: id, parser: parsed.parser });
   return { id, sourceType, sourceUrl, title, content, status: "extracted", extraction, createdAt };
 }
 
