@@ -4,6 +4,8 @@ export type SampleStrategy = {
   concept: string;
   pack: "famous-inspired" | "common";
   engine: "available" | "roadmap";
+  tier: "ready" | "clarify" | "pro";
+  examplePrompt: string;
 };
 
 const inspiredNames = [
@@ -45,7 +47,13 @@ const commonNames = [
 const make = (pack: SampleStrategy["pack"], rows: readonly (readonly [string, string, string])[]): SampleStrategy[] =>
   rows.map(([id, name, concept]) => ({
     id, name, concept, pack,
-    engine: id === "opening-range" || id === "8am-orb" || id === "930-orb" ? "available" : "roadmap"
+    engine: id === "opening-range" || id === "8am-orb" || id === "930-orb" ? "available" : "roadmap",
+    tier: id === "opening-range" || id === "8am-orb" || id === "930-orb" ? "ready" : /rsi|ema|vwap|gap|can-slim|darvas|volatility|mean/.test(id) ? "pro" : "clarify",
+    examplePrompt: id === "8am-orb" || id === "opening-range"
+      ? "Test the 8 AM opening range breakout on NQ. Use a 15-minute range, 5-minute candles, stop at the opposite side of the range, take profit at 1:3, one trade per day."
+      : id === "930-orb"
+        ? "Test the 9:30 AM opening range breakout on SPY. Use a 15-minute range, 5-minute candles, stop at the opposite side of the range, take profit at 1:2, one trade per day."
+        : `${name}: ${concept} Define the market, timeframe, objective entry trigger, stop loss, take profit, filters, and one-trade-per-day rule before testing.`
   }));
 
 export const SAMPLE_STRATEGIES = [

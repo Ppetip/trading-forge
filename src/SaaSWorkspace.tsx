@@ -29,6 +29,19 @@ type ServerResult = {
   };
   createdAt: string;
 };
+type PreflightClassification = {
+  inputTier: string;
+  nextWorkflowTier: string;
+  strategyFamily: string;
+  planImplication: string;
+  confidence: number;
+  reasons: string[];
+  warnings: string[];
+  missingFields: string[];
+  detectedSymbols: string[];
+  shouldRunFullParser: boolean;
+  fallbackUsed?: boolean;
+};
 
 const defaults: StrategyRules = {
   name: "NQ 8:00 Opening Range", strategyType: "opening_range_breakout", market: "Futures",
@@ -41,6 +54,7 @@ const defaults: StrategyRules = {
 const formatR = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}R`;
 const yearsFor = (range: StrategyRules["dateRange"]) => ({ "6m": 0.5, "1y": 1, "3y": 3, "5y": 5 })[range] ?? 1;
 const hasPremiumData = (plan: ApiAccount["plan"]) => plan === "trial" || plan === "pro" || plan === "power";
+const cleanLabel = (value: string) => value.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 function dataWindowPaywall(rules: StrategyRules, plan: ApiAccount["plan"]): PaywallInfo | null {
   const intraday = true;
@@ -76,6 +90,7 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
   const [versionId, setVersionId] = useState<string | null>(null);
   const [comparison, setComparison] = useState("single");
   const [paywall, setPaywall] = useState<PaywallInfo | null>(null);
+  const [preflight, setPreflight] = useState<PreflightClassification | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -98,6 +113,14 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
     const paywallInfo = paywallFromError(caught);
     if (paywallInfo) { setPaywall(paywallInfo); setError(""); return; }
     const apiError = caught as ApiError;
+    const maybePreflight = (apiError.details as { preflight?: PreflightClassification } | undefined)?.preflight;
+    if (apiError.code === "PREFLIGHT_NOT_PARSEABLE" && maybePreflight) {
+      setPreflight(maybePreflight);
+      setError("");
+      setMessage("");
+      setReadiness(STRATEGY_READINESS.NEEDS_CLARIFICATION);
+      return;
+    }
     setError(apiError.message || "Request failed.");
     if (apiError.status === 401) setAccount(null);
   };
@@ -109,6 +132,17 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
 
   async function parsePrompt(showConfirmation = true) {
     setError(""); if (showConfirmation) setMessage("");
+    try {
+      const classified = (await saasApi.preflightClassify(prompt, { symbol: rules.symbol, timezone: rules.timezone })).preflight as unknown as PreflightClassification;
+      setPreflight(classified);
+      if (!classified.shouldRunFullParser) {
+        setReadiness(STRATEGY_READINESS.NEEDS_CLARIFICATION);
+        if (showConfirmation) setMessage("");
+        return { rules, status: STRATEGY_READINESS.NEEDS_CLARIFICATION };
+      }
+    } catch {
+      setPreflight(null);
+    }
     const response = await saasApi.parseRules(prompt, { symbol: rules.symbol, timezone: rules.timezone });
     const parsedRules = response.rules as unknown as StrategyRules;
     setRules(parsedRules);
@@ -117,6 +151,28 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
     setReadiness(status);
     if (showConfirmation) setMessage(status === STRATEGY_READINESS.READY_TO_BACKTEST ? "Rules extracted and ready to backtest." : readinessLabel(status));
     return { rules: parsedRules, status };
+  }
+
+  function addCommonDefaults() {
+    const next: StrategyRules = {
+      ...rules,
+      strategyType: "opening_range_breakout" as const,
+      symbol: rules.symbol || "NQ",
+      timeframe: rules.timeframe || "5m",
+      dateRange: rules.dateRange || "1y",
+      sessionTime: rules.sessionTime || "08:00",
+      timezone: rules.timezone || "America/New_York",
+      openingRangeMinutes: rules.openingRangeMinutes || 15,
+      stopRule: "opposite_side_of_range" as const,
+      rewardRisk: rules.rewardRisk || 3,
+      maxTradesPerDay: 1,
+      fees: true,
+      slippage: true
+    };
+    setRules(next);
+    setPrompt((current) => `${current.trim()}\n\nUse ${next.symbol}, ${next.timeframe} candles, latest ${next.dateRange}, stop at the opposite side of the range, take profit at 1:${next.rewardRisk}, one trade per day, fees and slippage included.`);
+    setMessage("Added common objective defaults. Preview rules again before running.");
+    setPreflight(null);
   }
 
   async function upload(file?: File) {
@@ -149,6 +205,7 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
       const parsed = await parsePrompt(false);
       const tierWarning = candles.length ? null : dataWindowPaywall(parsed.rules, account.plan);
       if (tierWarning) { setMessage(""); setPaywall(tierWarning); return; }
+      if (parsed.status === STRATEGY_READINESS.NEEDS_CLARIFICATION) { setMessage(""); return; }
       if (parsed.status === STRATEGY_READINESS.UNSUPPORTED_VAGUE_PROMPT) { setMessage(""); setError("Required execution rules are still subjective or undefined. Choose objective assumptions before testing."); return; }
       if (parsed.status === STRATEGY_READINESS.PARSED_BUT_UNSUPPORTED) { setMessage("Rules extracted successfully."); setError(`These rules are objective, but the ${parsed.rules.strategyType.replaceAll("_", " ")} server engine is not implemented. No report was created.`); return; }
       await runSingle(parsed.rules);
@@ -227,11 +284,11 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
       {message && <div className="saas-alert success"><Check size={14} />{message}</div>}
       {error && <div className="saas-alert error">{error}</div>}
       {page === "workspace" && <WorkspaceWithPaywall
-        rules={rules} setRules={setRules} prompt={prompt} setPrompt={(value) => { setPrompt(value); setReadiness(STRATEGY_READINESS.NEEDS_CLARIFICATION); setReport(null); }} assumptions={assumptions}
+        rules={rules} setRules={setRules} prompt={prompt} setPrompt={(value) => { setPrompt(value); setReadiness(STRATEGY_READINESS.NEEDS_CLARIFICATION); setReport(null); setPreflight(null); }} assumptions={assumptions}
         parsePrompt={() => { parsePrompt().catch(handleError); }} validateStrategy={validateStrategy} upload={() => fileRef.current?.click()} fileRef={fileRef} onFile={upload}
         dataLabel={dataLabel} rulePreview={rulePreview} comparison={comparison} setComparison={setComparison}
         run={run} saveVersion={saveVersion} plan={account.plan} readiness={readiness} report={report} cached={cached} versionId={versionId}
-        openPaywall={setPaywall}
+        openPaywall={setPaywall} preflight={preflight} addCommonDefaults={addCommonDefaults}
       />}
       {page === "strategies" && <AccountPage account={account} strategies={strategies} />}
     </main>
@@ -263,6 +320,7 @@ type WorkspaceProps = {
   setComparison: (value: string) => void; run: () => void; saveVersion: () => void; report: ServerResult | null;
   cached: boolean; versionId: string | null; plan: ApiAccount["plan"]; readiness: StrategyReadiness;
   openPaywall: (info: PaywallInfo) => void;
+  preflight: PreflightClassification | null; addCommonDefaults: () => void;
 };
 
 function WorkspaceWithPaywall(props: WorkspaceProps) {
@@ -279,6 +337,7 @@ function WorkspaceWithPaywall(props: WorkspaceProps) {
     <header className="saas-header"><div><p>STRATEGY WORKSPACE</p><h1>{rules.name}</h1><span>{props.versionId ? "Version saved" : "Unsaved draft"} · Server-backed ORB</span></div><div><button onClick={props.saveVersion}><Save size={14} />Save version</button><button className="primary" onClick={props.validateStrategy}><Sparkles size={14} />Validate strategy</button></div></header>
     <div className="saas-workspace"><section>
       <div className="saas-card"><div className="saas-card-title"><span>01</span><h2>Describe the strategy</h2><em><Sparkles size={12} />Prompt-to-rules</em></div><textarea value={props.prompt} onChange={(event) => props.setPrompt(event.target.value)} /><div className="card-foot"><small>AI structures rules; the engine calculates results.</small><button className="validate-inline" onClick={props.parsePrompt}>Preview extracted rules <ArrowRight size={12} /></button></div></div>
+      {props.preflight && <PreflightPanel preflight={props.preflight} onAddDefaults={props.addCommonDefaults} />}
       <div className="market-data-status"><Database size={16} /><div><strong>Market data is automatic</strong><span>Research-grade data is used when possible. Premium intraday/futures requests are explained before running.</span></div><em>{props.dataLabel}</em><details><summary>Use custom CSV instead</summary><input hidden ref={props.fileRef} type="file" accept=".csv" onChange={(event) => props.onFile(event.target.files?.[0])} /><button onClick={props.upload}><Upload size={13} />Upload CSV</button></details></div>
       <div className="saas-card"><div className="saas-card-title"><span>03</span><h2>Exact rules</h2><em className={props.readiness === STRATEGY_READINESS.READY_TO_BACKTEST ? "valid" : ""}>{readinessLabel(props.readiness)}</em></div>{props.assumptions.length > 0 && <div className="assumption-list"><strong>Parser assumptions</strong>{props.assumptions.map((item) => <span key={item}>{item}</span>)}</div>}<pre>{JSON.stringify(props.rulePreview, null, 2)}</pre></div>
       {props.report && <ServerReport report={props.report} cached={props.cached} />}
@@ -297,6 +356,38 @@ function WorkspaceWithPaywall(props: WorkspaceProps) {
       <div className="server-note"><Database size={14} /><div><strong>Server-calculated</strong><span>Results are never generated by AI.</span></div></div>
     </details></aside></div>
   </>;
+}
+
+function PreflightPanel({ preflight, onAddDefaults }: { preflight: PreflightClassification; onAddDefaults: () => void }) {
+  const blocked = !preflight.shouldRunFullParser;
+  const title = blocked ? "Needs one more step before parsing" : "Ready for rule extraction";
+  const primaryReason = preflight.reasons[0] ?? "The prompt was classified before the full parser was allowed to spend tokens.";
+  const routeHref = preflight.inputTier === "TRANSCRIPT_OR_NOTES" ? "#/transcripts"
+    : preflight.inputTier === "REPORT_REVIEW" ? "#/reports"
+      : preflight.inputTier === "CODE_ADMIN_DEPLOYMENT" ? "#/admin"
+        : "#/account";
+  const routeLabel = preflight.inputTier === "TRANSCRIPT_OR_NOTES" ? "Open extractor"
+    : preflight.inputTier === "REPORT_REVIEW" ? "Open reports"
+      : preflight.inputTier === "CODE_ADMIN_DEPLOYMENT" ? "Open admin"
+        : "View data options";
+  return <div className={blocked ? "preflight-panel blocked" : "preflight-panel ready"}>
+    <div className="preflight-head"><div><span>AI PREFLIGHT · {Math.round(preflight.confidence * 100)}% confidence</span><h3>{title}</h3><p>{primaryReason}</p></div><strong>{cleanLabel(preflight.inputTier)}</strong></div>
+    <div className="preflight-grid">
+      <div><span>Workflow</span><b>{cleanLabel(preflight.nextWorkflowTier)}</b></div>
+      <div><span>Family</span><b>{cleanLabel(preflight.strategyFamily)}</b></div>
+      <div><span>Plan/data</span><b>{cleanLabel(preflight.planImplication)}</b></div>
+      <div><span>Symbols</span><b>{preflight.detectedSymbols.length ? preflight.detectedSymbols.join(", ") : "Not specified"}</b></div>
+    </div>
+    {(preflight.missingFields.length > 0 || preflight.warnings.length > 0) && <div className="preflight-details">
+      {preflight.missingFields.length > 0 && <section><h4>Missing details</h4>{preflight.missingFields.map((field) => <span key={field}>{cleanLabel(field)}</span>)}</section>}
+      {preflight.warnings.length > 0 && <section><h4>Warnings</h4>{preflight.warnings.map((warning) => <span key={warning}>{warning}</span>)}</section>}
+    </div>}
+    <div className="preflight-actions">
+      {preflight.inputTier === "STRATEGY_VAGUE" || preflight.inputTier === "UNSUPPORTED_OR_UNCLEAR" ? <button onClick={onAddDefaults}>Add common defaults</button> : null}
+      {preflight.inputTier === "LIVE_TRADE_ADVICE" ? <span>EdgeLab tests historical rules; it does not give live buy/sell calls.</span> : <a href={routeHref}>{routeLabel} <ArrowRight size={12} /></a>}
+      <small>{preflight.fallbackUsed ? "Used deterministic fallback." : "Cheap AI classifier checked this prompt."}</small>
+    </div>
+  </div>;
 }
 
 function Workspace(props: WorkspaceProps) {
