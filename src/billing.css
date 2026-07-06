@@ -1,0 +1,1 @@
+.billing-action{display:flex;flex-direction:column;gap:7px}.billing-action>a{display:flex;align-items:center;justify-content:center;gap:5px;border:1px solid #55d6a7;color:#55d6a7;padding:8px;text-decoration:none;font-size:8px}.billing-action>button:disabled{opacity:.5}

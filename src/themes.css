@@ -1,0 +1,21 @@
+.app-shell.light{background:#eef1f3;color:#26313a}
+.app-shell.light .sidebar{background:#f7f8f9;border-color:#d7dde1}
+.app-shell.light .brand{color:#172129}
+.app-shell.light .brand-mark,.app-shell.light .brand>span{background:#e3f3ed}
+.app-shell.light .nav-item{color:#68737c}
+.app-shell.light .nav-item:hover{background:#e9edef;color:#26313a}
+.app-shell.light .nav-item.active{background:#dfe8e5;color:#172129}
+.app-shell.light .sidebar-foot,.app-shell.light .topbar{border-color:#d7dde1}
+.app-shell.light .topbar{background:#eef1f3ed}
+.app-shell.light h1,.app-shell.light h2,.app-shell.light h3{color:#1e2931}
+.app-shell.light .button.secondary{background:#f9fafb;border-color:#cdd4d9;color:#394650}
+.app-shell.light .workspace-grid,.app-shell.light .settings-panel{background:#eef1f3}
+.app-shell.light .settings-panel{border-color:#d7dde1}
+.app-shell.light .card,.app-shell.light .idea-card,.app-shell.light .rule-preview,.app-shell.light .stat,.app-shell.light .chart-card,.app-shell.light .table-card{background:#fafbfb;border-color:#d8dee2}
+.app-shell.light textarea,.app-shell.light input,.app-shell.light select,.app-shell.light pre{background:#fff;border-color:#ced5da;color:#35434d}
+.app-shell.light table th{background:#f0f3f4;color:#65717b}
+.app-shell.light table td,.app-shell.light table th{border-color:#e0e5e8}
+.app-shell.light table td{color:#4d5963}
+.app-shell.light .empty,.app-shell.light .empty-results{border-color:#cbd3d8}
+.app-shell.light .metrics-strip span{background:#fafbfb;border-color:#d8dee2}
+.app-shell.light .notice{box-shadow:0 8px 30px #80909d33}

@@ -1,0 +1,32 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 8787
+      EDGELAB_DB_PATH: /app/data/edgelab.sqlite
+      EDGELAB_APP_URL: ${EDGELAB_APP_URL:?Set EDGELAB_APP_URL}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:?Set STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:?Set STRIPE_WEBHOOK_SECRET}
+      STRIPE_PRO_PRICE_ID: ${STRIPE_PRO_PRICE_ID:?Set STRIPE_PRO_PRICE_ID}
+      EDGELAB_BILLING_WEBHOOK_SECRET: ${EDGELAB_BILLING_WEBHOOK_SECRET:-}
+    volumes:
+      - edgelab_data:/app/data
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${EDGELAB_HTTP_PORT:-8080}:80"
+
+volumes:
+  edgelab_data:
