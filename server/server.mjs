@@ -1,4 +1,5 @@
-﻿import { createServer } from "node:http";
+import "./env.mjs";
+import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
