@@ -1,17 +1,78 @@
-﻿node_modules/
-dist/
-.vite/
-*.local
+# Logs
+logs
 *.log
-.env
-.env.*
-!.env.example
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime and diagnostic data
+pids
+*.pid
+*.seed
+*.pid.lock
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Dependency directories
+node_modules/
+jspm_packages/
+bower_components/
+web_modules/
+
+# Build and cache output
+dist/
+out/
+.vite/
+.cache/
+.parcel-cache
+.next/
+.nuxt/
+.output/
+.temp
+.svelte-kit/
+.docusaurus/
+coverage/
+*.lcov
+.nyc_output
+build/Release
+
+# EdgeLab runtime data and local databases
 data/
+data/market-cache/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+
+# Environment files
+.env
+.env.*
+!.env.example
+*.local
+
+# TypeScript / Vite generated files
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Package-manager and tool caches
+.npm
+.eslintcache
+.stylelintcache
+.pnpm-store
+.yarn-integrity
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# OS/editor noise
 .DS_Store
 Thumbs.db
+.node_repl_history
+.vscode-test
+
