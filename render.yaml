@@ -3,7 +3,7 @@
     name: edgelab
     runtime: node
     plan: starter
-    buildCommand: CI=true npx --yes pnpm@9.15.9 install --frozen-lockfile && npx --yes pnpm@9.15.9 build
+    buildCommand: CI=true npx --yes pnpm@9.15.9 install --frozen-lockfile --prod=false && npx --yes pnpm@9.15.9 build
     startCommand: node server/server.mjs
     healthCheckPath: /api/health
     disk:

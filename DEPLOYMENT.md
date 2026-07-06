@@ -56,7 +56,7 @@ If configuring the Render service manually, use:
 
 ```text
 Runtime: Node
-Build Command: CI=true npx --yes pnpm@9.15.9 install --frozen-lockfile && npx --yes pnpm@9.15.9 build
+Build Command: CI=true npx --yes pnpm@9.15.9 install --frozen-lockfile --prod=false && npx --yes pnpm@9.15.9 build
 Start Command: node server/server.mjs
 Health Check Path: /api/health
 ```
@@ -74,7 +74,7 @@ MARKET_DATA_CACHE_PATH=/opt/render/project/src/data/market-cache
 EDGELAB_ENABLE_ADMIN_API=false
 ```
 
-With `DATABASE_URL` present and `EDGELAB_DB_DRIVER=postgres`, the app uses Neon Postgres for accounts, sessions, reports, billing, usage events, transcripts, and admin settings. Keep a persistent disk mounted at `/opt/render/project/src/data` for the market-data cache. Set `EDGELAB_DB_DRIVER=sqlite` only for local SQLite fallback. Do not use `corepack enable`, `npm install -g pnpm`, or `pnpm add -g pnpm` in Render build commands; those can fail with `EROFS: read-only file system, unlink '/usr/bin/pnpm'`.
+With `DATABASE_URL` present and `EDGELAB_DB_DRIVER=postgres`, the app uses Neon Postgres for accounts, sessions, reports, billing, usage events, transcripts, and admin settings. Keep a persistent disk mounted at `/opt/render/project/src/data` for the market-data cache. Set `EDGELAB_DB_DRIVER=sqlite` only for local SQLite fallback. The build command must include `--prod=false` because TypeScript, Vite, and React type declarations are dev dependencies needed during build even when `NODE_ENV=production`. Do not use `corepack enable`, `npm install -g pnpm`, or `pnpm add -g pnpm` in Render build commands; those can fail with `EROFS: read-only file system, unlink '/usr/bin/pnpm'`.
 
 ## Admin operations
 
