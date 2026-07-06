@@ -1,0 +1,64 @@
+export const PREFLIGHT_VERSION = "preflight-1.0.0";
+
+export const INPUT_TIER = Object.freeze({
+  STRATEGY_READY: "STRATEGY_READY",
+  STRATEGY_PARSEABLE: "STRATEGY_PARSEABLE",
+  STRATEGY_VAGUE: "STRATEGY_VAGUE",
+  REPORT_REVIEW: "REPORT_REVIEW",
+  TRANSCRIPT_OR_NOTES: "TRANSCRIPT_OR_NOTES",
+  LIVE_TRADE_ADVICE: "LIVE_TRADE_ADVICE",
+  CODE_ADMIN_DEPLOYMENT: "CODE_ADMIN_DEPLOYMENT",
+  UNSUPPORTED_OR_UNCLEAR: "UNSUPPORTED_OR_UNCLEAR"
+});
+
+export const NEXT_WORKFLOW_TIER = Object.freeze({
+  FULL_STRATEGY_PARSER: "FULL_STRATEGY_PARSER",
+  CLARIFICATION: "CLARIFICATION",
+  CHEAP_HELPER: "CHEAP_HELPER",
+  TRANSCRIPT_EXTRACTOR: "TRANSCRIPT_EXTRACTOR",
+  REPORT_REVIEW: "REPORT_REVIEW",
+  SAFETY_REDIRECT: "SAFETY_REDIRECT",
+  CODE_ADMIN_SUPPORT: "CODE_ADMIN_SUPPORT"
+});
+
+export const STRATEGY_FAMILY = Object.freeze({
+  OPENING_RANGE_BREAKOUT: "OPENING_RANGE_BREAKOUT",
+  PREVIOUS_DAY_LEVEL: "PREVIOUS_DAY_LEVEL",
+  MOVING_AVERAGE: "MOVING_AVERAGE",
+  RSI_MEAN_REVERSION: "RSI_MEAN_REVERSION",
+  BOLLINGER_RSI: "BOLLINGER_RSI",
+  SUPPORT_RESISTANCE: "SUPPORT_RESISTANCE",
+  UNKNOWN: "UNKNOWN"
+});
+
+export const PLAN_IMPLICATION = Object.freeze({
+  FREE_OK: "FREE_OK",
+  STARTER_HELPFUL: "STARTER_HELPFUL",
+  PRO_DATA_LIKELY: "PRO_DATA_LIKELY",
+  PAID_AI_LIKELY: "PAID_AI_LIKELY",
+  ADMIN_ONLY: "ADMIN_ONLY",
+  BLOCKED_SAFETY: "BLOCKED_SAFETY"
+});
+
+export const PREFLIGHT_SCHEMA_FIELDS = Object.freeze([
+  "version",
+  "inputTier",
+  "nextWorkflowTier",
+  "strategyFamily",
+  "planImplication",
+  "confidence",
+  "reasons",
+  "warnings",
+  "missingFields",
+  "detectedSymbols",
+  "shouldRunFullParser"
+]);
+
+const enumValues = (object) => new Set(Object.values(object));
+export const PREFLIGHT_ENUMS = Object.freeze({
+  inputTier: enumValues(INPUT_TIER),
+  nextWorkflowTier: enumValues(NEXT_WORKFLOW_TIER),
+  strategyFamily: enumValues(STRATEGY_FAMILY),
+  planImplication: enumValues(PLAN_IMPLICATION)
+});
+

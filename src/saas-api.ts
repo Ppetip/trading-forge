@@ -39,6 +39,10 @@ export const saasApi = {
     request<{ parser: string; rules: Record<string, unknown>; assumptions: string[]; untestable: string[]; clarificationNeeded: boolean }>("/api/ai/parse-rules", {
       method: "POST", body: JSON.stringify({ prompt, defaults })
     }),
+  preflightClassify: (prompt: string, defaults?: Record<string, unknown>) =>
+    request<{ preflight: Record<string, unknown> }>("/api/ai/preflight-classify", {
+      method: "POST", body: JSON.stringify({ prompt, defaults })
+    }),
   strategies: () => request<{ strategies: Array<Record<string, unknown>> }>("/api/strategies"),
   createStrategy: (input: Record<string, unknown>) =>
     request<{ strategy: { id: string; versionId: string; versionNumber: number } }>("/api/strategies", { method: "POST", body: JSON.stringify(input) }),

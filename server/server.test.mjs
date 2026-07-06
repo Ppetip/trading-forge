@@ -167,3 +167,43 @@ test("authentication rejects duplicates and invalid credentials", async () => {
     assert.equal(invalid.response.status, 401);
   });
 });
+
+test("preflight endpoint gates low-confidence prompts before full parser", async () => {
+  const db = createDatabase(":memory:");
+  let fullParserCalls = 0;
+  const server = createEdgeLabServer({
+    db,
+    aiParser: async () => { fullParserCalls += 1; throw new Error("full parser should not run"); },
+    preflightClassifier: async () => ({
+      version: "test",
+      inputTier: "STRATEGY_VAGUE",
+      nextWorkflowTier: "CLARIFICATION",
+      strategyFamily: "UNKNOWN",
+      planImplication: "FREE_OK",
+      confidence: 0.4,
+      reasons: ["too vague"],
+      warnings: [],
+      missingFields: ["stop_loss"],
+      detectedSymbols: [],
+      shouldRunFullParser: false,
+      fallbackUsed: false
+    })
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const cookie = await register(base, "preflight@example.com");
+    const classified = await request(base, "/api/ai/preflight-classify", { method: "POST", cookie, body: { prompt: "Buy when it looks strong." } });
+    assert.equal(classified.response.status, 200);
+    assert.equal(classified.data.preflight.shouldRunFullParser, false);
+    const parsed = await request(base, "/api/ai/parse-rules", { method: "POST", cookie, body: { prompt: "Buy when it looks strong." } });
+    assert.equal(parsed.response.status, 422);
+    assert.equal(parsed.data.error.code, "PREFLIGHT_NOT_PARSEABLE");
+    assert.equal(fullParserCalls, 0);
+  } finally {
+    server.close();
+    await once(server, "close");
+    db.close();
+  }
+});

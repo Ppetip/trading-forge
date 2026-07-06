@@ -24,6 +24,7 @@ import { enforceRateLimit, enforceSameOrigin, assertLoginAllowed, recordLoginFai
 import { auditEvent } from "./admin-controls.mjs";
 import { handleAdminRoutes } from "./admin-routes.mjs";
 import { reviewReportWithOllama } from "./ollama-review.mjs";
+import { classifyPreflight } from "./preflight-classifier.mjs";
 
 const now = () => new Date().toISOString();
 const JSON_LIMITS = Object.freeze({
@@ -65,6 +66,7 @@ export function createEdgeLabServer({
   stripeFetch,
   aiParser = parseStrategyPromptWithOllama,
   marketDataRouter = routeMarketData,
+  preflightClassifier = classifyPreflight,
   staticDir = process.env.EDGELAB_STATIC_DIR ? resolve(process.env.EDGELAB_STATIC_DIR) : process.env.NODE_ENV === "production" ? resolve("dist") : null
 } = {}) {
   return createServer(async (request, response) => {
@@ -135,9 +137,26 @@ export function createEdgeLabServer({
       }
       if (url.pathname === "/api/ai/parse-rules" && method === "POST") {
         enforceRateLimit(request, "ai");
-        const account = requireAuth(request, db), body = requireObject(await readJson(request, JSON_LIMITS.ai)), parsed = await aiParser(body.prompt, body.defaults);
-        recordUsage(db, account.id, "prompt_parse", { parser: parsed.parser });
+        const account = requireAuth(request, db), body = requireObject(await readJson(request, JSON_LIMITS.ai));
+        const preflight = await preflightClassifier(body.prompt, { defaults: body.defaults });
+        recordUsage(db, account.id, "prompt_preflight", { inputTier: preflight.inputTier, nextWorkflowTier: preflight.nextWorkflowTier, confidence: preflight.confidence, fallbackUsed: preflight.fallbackUsed });
+        if (!preflight.shouldRunFullParser) {
+          const error = new Error("This prompt needs clarification or a different workflow before strategy parsing.");
+          error.status = 422;
+          error.code = "PREFLIGHT_NOT_PARSEABLE";
+          error.details = { preflight };
+          throw error;
+        }
+        const parsed = await aiParser(body.prompt, body.defaults);
+        recordUsage(db, account.id, "prompt_parse", { parser: parsed.parser, preflight: { inputTier: preflight.inputTier, confidence: preflight.confidence } });
         return send(response, 200, parsed);
+      }
+      if (url.pathname === "/api/ai/preflight-classify" && method === "POST") {
+        enforceRateLimit(request, "ai");
+        const account = requireAuth(request, db), body = requireObject(await readJson(request, JSON_LIMITS.ai));
+        const preflight = await preflightClassifier(body.prompt, { defaults: body.defaults });
+        recordUsage(db, account.id, "prompt_preflight", { inputTier: preflight.inputTier, nextWorkflowTier: preflight.nextWorkflowTier, confidence: preflight.confidence, fallbackUsed: preflight.fallbackUsed });
+        return send(response, 200, { preflight });
       }
       if (url.pathname === "/api/transcripts" && method === "GET") {
         const account = requireAuth(request, db);
