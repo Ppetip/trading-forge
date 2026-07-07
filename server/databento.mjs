@@ -1,4 +1,4 @@
-﻿import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -9,8 +9,12 @@ const CACHE_ROOT = resolve(process.env.MARKET_DATA_CACHE_PATH ?? "data/market-ca
 const EQUITY_SYMBOLS = new Set(["SPY", "QQQ", "IWM", "DIA", "AAPL", "MSFT", "NVDA", "AMZN", "META", "TSLA"]);
 
 function yearsFor(range) {
-  const hinted = Number.parseInt(String(range ?? "1y"), 10);
-  return Math.max(1, Math.min(MAX_YEARS, Number.isFinite(hinted) ? hinted : 1));
+  const text = String(range ?? "1y").trim().toLowerCase();
+  const value = Number.parseFloat(text);
+  if (!Number.isFinite(value) || value <= 0) return 1;
+  if (text.includes("d")) return Math.max(1 / 365, Math.min(MAX_YEARS, value / 365));
+  if (text.includes("m")) return Math.max(1 / 12, Math.min(MAX_YEARS, value / 12));
+  return Math.max(1 / 365, Math.min(MAX_YEARS, value));
 }
 
 function marketSpec(rules) {
@@ -85,7 +89,7 @@ function nextChunkBoundary(date, requestEnd) {
     : new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
 }
 
-export async function fetchDatabentoCandles(rules, { fetchImpl = fetch, apiKey = process.env.DATABENTO_API_KEY, returnMetadata = false } = {}) {
+export async function fetchDatabentoCandles(rules, { fetchImpl = fetch, apiKey = process.env.DATABENTO_API_KEY, returnMetadata = false, start: requestedStartOverride, end: requestedEndOverride } = {}) {
   if (!apiKey) { const error = new Error("Databento is not configured."); error.status = 503; error.code = "MARKET_DATA_NOT_CONFIGURED"; throw error; }
   const spec = marketSpec(rules), authorization = `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`;
   const rangeUrl = `https://hist.databento.com/v0/metadata.get_dataset_range?dataset=${encodeURIComponent(spec.dataset)}`;
@@ -94,9 +98,13 @@ export async function fetchDatabentoCandles(rules, { fetchImpl = fetch, apiKey =
   const availability = await rangeResponse.json();
   const schemaRange = availability.schema?.["ohlcv-1m"] ?? availability;
   const entitlementEnd = new Date(schemaRange.end), availableStart = new Date(schemaRange.start);
-  const end = new Date(entitlementEnd.getTime() - 60_000);
-  if (![end, availableStart].every((date) => Number.isFinite(date.getTime()))) { const error = new Error("Databento returned an invalid availability window."); error.status = 502; error.code = "MARKET_DATA_FAILED"; throw error; }
-  const requestedStart = new Date(end); requestedStart.setUTCFullYear(requestedStart.getUTCFullYear() - yearsFor(rules.dateRange)); requestedStart.setUTCHours(0, 0, 0, 0);
+  const entitlementSafeEnd = new Date(entitlementEnd.getTime() - 60_000);
+  if (![entitlementSafeEnd, availableStart].every((date) => Number.isFinite(date.getTime()))) { const error = new Error("Databento returned an invalid availability window."); error.status = 502; error.code = "MARKET_DATA_FAILED"; throw error; }
+  const requestedEnd = requestedEndOverride ? new Date(requestedEndOverride) : entitlementSafeEnd;
+  const end = new Date(Math.min(requestedEnd.getTime(), entitlementSafeEnd.getTime()));
+  const requestedStart = requestedStartOverride ? new Date(requestedStartOverride) : new Date(end.getTime() - yearsFor(rules.dateRange) * 365 * 24 * 60 * 60 * 1000);
+  requestedStart.setUTCHours(0, 0, 0, 0);
+  if (![end, requestedStart].every((date) => Number.isFinite(date.getTime())) || requestedStart >= end) { const error = new Error("Databento request window is invalid."); error.status = 422; error.code = "INVALID_MARKET_DATA_WINDOW"; throw error; }
   const start = new Date(Math.max(requestedStart.getTime(), availableStart.getTime()));
   const stitched = new Map();
   let cacheHits = 0, downloads = 0;

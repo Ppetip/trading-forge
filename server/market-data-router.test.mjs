@@ -90,3 +90,30 @@ test("data cost score distinguishes cache and large premium pulls", () => {
   assert.equal(estimateDataCost({ provider: "databento", estimatedCandles: 150000, providerCalls: 12 }), "high");
   assert.equal(estimateDataCost({ provider: "yahoo", estimatedCandles: 300 }), "low");
 });
+
+test("trial and pro long intraday futures requests route to Databento with the router window", async () => {
+  for (const plan of ["trial", "pro"]) {
+    const previousKey = process.env.DATABENTO_API_KEY;
+    process.env.DATABENTO_API_KEY = "test-key";
+    const db = createDatabase(":memory:"), user = account(db, plan);
+    const bodies = [];
+    const routed = await routeMarketData({ db, account: user, rules: { ...rules, timeframe: "5m", dateRange: "6m" }, now: new Date("2026-07-06T12:00:00Z"), fetchImpl: async (url, options = {}) => {
+      if (String(url).includes("metadata.get_dataset_range")) return { ok: true, json: async () => ({ schema: { "ohlcv-1m": { start: "2026-01-01T00:00:00Z", end: "2026-07-06T12:00:00Z" } } }) };
+      bodies.push(String(options.body));
+      return { ok: true, text: async () => '{"ts_event":"2026-07-06T13:30:00Z","open":"100","high":"101","low":"99","close":"100"}\n{"ts_event":"2026-07-06T13:35:00Z","open":"100","high":"102","low":"100","close":"101"}\n' };
+    } });
+    assert.equal(routed.dataProvenance.provider, "databento");
+    assert.equal(routed.dataProvenance.grade, "premium");
+    assert.equal(routed.dataProvenance.continuous, true);
+    assert.ok(bodies.every((body) => body.includes("dataset=GLBX.MDP3") && body.includes("symbols=NQ.c.0") && body.includes("2026-01-06")));
+    db.close();
+    if (previousKey === undefined) delete process.env.DATABENTO_API_KEY; else process.env.DATABENTO_API_KEY = previousKey;
+  }
+});
+
+test("research provider network failures become market-data errors", async () => {
+  const db = createDatabase(":memory:"), user = account(db, "free");
+  await assert.rejects(routeMarketData({ db, account: user, rules: { ...rules, symbol: "SPY", timeframe: "15m", dateRange: "30d" }, fetchImpl: async () => { throw new Error("dns"); } }),
+    (error) => error.code === "RESEARCH_DATA_FAILED" && error.status === 502);
+  db.close();
+});
