@@ -9,7 +9,7 @@ export const FUTURES_PROXIES = Object.freeze({ NQ: "QQQ", ES: "SPY", RTY: "IWM",
 const CACHE_VERSION = 2;
 const NORMALIZATION_VERSION = "ohlc-v1";
 const CACHE_ROOT = resolve(process.env.MARKET_DATA_CACHE_PATH ?? "data/market-cache", "providers");
-const PREMIUM_PLANS = new Set(["pro", "power"]);
+const PREMIUM_PLANS = new Set(["trial", "pro", "power"]);
 
 function marketError(message, code, status = 422, details) {
   const error = new Error(message); error.code = code; error.status = status;
@@ -76,7 +76,9 @@ async function fetchYahoo(query, fetchImpl) {
   const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(query.resolvedSymbol)}`);
   url.searchParams.set("period1", String(Math.floor(new Date(query.start).getTime() / 1000))); url.searchParams.set("period2", String(Math.floor(new Date(query.end).getTime() / 1000)));
   url.searchParams.set("interval", query.interval); url.searchParams.set("events", "div,splits"); url.searchParams.set("includeAdjustedClose", "true");
-  const response = await fetchImpl(url, { headers: { "user-agent": "EdgeLab research validator/1.0" } });
+  let response;
+  try { response = await fetchImpl(url, { headers: { "user-agent": "EdgeLab research validator/1.0" } }); }
+  catch { throw marketError("Research-grade market data is temporarily unavailable. Retry shortly, use a shorter window, or upload candles.", "RESEARCH_DATA_FAILED", 502); }
   if (!response.ok) throw marketError("Research-grade market data is temporarily unavailable.", "RESEARCH_DATA_FAILED", 502);
   const payload = await response.json(), chart = payload?.chart?.result?.[0];
   if (!chart) throw marketError("No research-grade candles were available for this symbol and window.", "NO_MARKET_DATA");
@@ -136,12 +138,14 @@ export async function routeMarketData({ db, account, rules, candles, fetchImpl =
     if (controls.cachedDatabentoOnly) throw marketError("Fresh premium market-data downloads are temporarily disabled. Cached premium reports can still be viewed, but new premium windows cannot run right now.",
       "DATA_CONTROL_DATABENTO_CACHED_ONLY", 503, { provider: "databento" });
     await assertUsage(db, account, "premium_data_backtest", "premiumDataBacktests", now);
+    await assertUsage(db, account, "premium_data_window", "newPremiumWindows", now);
     const query = { provider: "databento", dataset: futureProxy ? "GLBX.MDP3" : "EQUS.MINI", requestedSymbol, resolvedSymbol: requestedSymbol,
       interval: String(rules.timeframe ?? "5m"), start: window.start.toISOString(), end: window.end.toISOString(), timezone: rules.timezone ?? "America/New_York",
       adjusted: false, continuous: Boolean(futureProxy) };
     await recordUsage(db, account.id, "data_request_started", query);
-    const result = await fetchDatabentoCandles(rules, { fetchImpl, returnMetadata: true });
-    if (result.downloads > 0) await assertUsage(db, account, "premium_data_window", "newPremiumWindows", now);
+    let result;
+    try { result = await fetchDatabentoCandles(rules, { fetchImpl, returnMetadata: true, start: query.start, end: query.end }); }
+    catch (error) { await recordUsage(db, account.id, "data_provider_error", { ...query, errorCode: error.code ?? "MARKET_DATA_FAILED" }); throw error; }
     await recordUsage(db, account.id, result.downloads > 0 ? "data_provider_fetch" : "data_cache_hit", { ...query, rowsReturned: result.candles.length,
       providerCalls: result.providerCalls, cacheHit: result.downloads === 0 });
     if (result.downloads > 0) await recordUsage(db, account.id, "premium_data_window", query);

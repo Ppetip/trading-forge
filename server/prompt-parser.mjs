@@ -17,13 +17,22 @@ export function parseStrategyPrompt(prompt, defaults = {}) {
     sessionTime = `${String(hour).padStart(2, "0")}:${session[2] ?? "00"}`;
   }
   const years = lower.match(/\b(\d+)\s*years?\b/)?.[1];
+  const months = lower.match(/\b(\d+)\s*months?\b/)?.[1];
+  const days = lower.match(/\b(\d+)\s*days?\b/)?.[1];
+  const dateRange = years
+    ? (Number(years) > 1 ? `${Math.min(5, Number(years))}y` : "1y")
+    : months
+      ? (Number(months) <= 6 ? "6m" : "1y")
+      : days
+        ? (Number(days) <= 30 ? "30d" : Number(days) <= 60 ? "60d" : "6m")
+        : "30d";
   const namedDays = [["monday", "Monday"], ["tuesday", "Tuesday"], ["wednesday", "Wednesday"], ["thursday", "Thursday"], ["friday", "Friday"]].filter(([key]) => lower.includes(key)).map(([, label]) => label);
   const assumptions = [];
   if (!timeframe) assumptions.push("Timeframe defaulted to 15-minute candles.");
   if (!range) assumptions.push("Opening range defaulted to 15 minutes.");
   if (!rewardRisk) assumptions.push("Reward/risk defaulted to 1:2.");
   if (!session) assumptions.push("Session start defaulted to 09:30 America/New_York.");
-  if (!years) assumptions.push("Historical intraday window defaulted to the latest 30 days so it fits research-grade data limits.");
+  if (!years && !months && !days) assumptions.push("Historical intraday window defaulted to the latest 30 days so it fits research-grade data limits.");
   if (!namedDays.length) assumptions.push("Test includes every eligible Monday through Friday; no weekday filter was requested.");
   const strategyType = lower.includes("opening range") || /\borb\b/.test(lower)
     ? "opening_range_breakout"
@@ -44,7 +53,7 @@ export function parseStrategyPrompt(prompt, defaults = {}) {
       market: defaults.market ?? "Futures",
       symbol,
       timeframe: `${timeframe ?? "15"}m`,
-      dateRange: years ? (Number(years) > 1 ? `${Math.min(4, Number(years))}y` : "1y") : "30d",
+      dateRange,
       sessionTime,
       timezone: defaults.timezone ?? "America/New_York",
       openingRangeMinutes: Number(range ?? 15),
@@ -57,7 +66,7 @@ export function parseStrategyPrompt(prompt, defaults = {}) {
       contractSelection: "continuous_front_contract",
       tradingDays: namedDays.length ? namedDays : ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
       entryConfirmation: "candle_close",
-      lookbackPolicy: years ? "user_specified" : "default_1_year",
+      lookbackPolicy: years || months || days ? "user_specified" : "default_30_days",
       fees: true,
       slippage: true,
       ...(strategyType === "rsi_reversal" ? {

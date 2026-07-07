@@ -1,4 +1,4 @@
-﻿import { parseStrategyPrompt } from "./prompt-parser.mjs";
+import { parseStrategyPrompt } from "./prompt-parser.mjs";
 import { AI_MODELS, callOpenRouterJson } from "./ai-provider.mjs";
 
 const DETERMINISTIC_KEYS = new Set(["symbol", "timeframe", "dateRange", "sessionTime", "timezone", "openingRangeMinutes", "rewardRisk"]);
@@ -9,7 +9,8 @@ export async function parseStrategyPromptWithOpenRouter(prompt, defaults = {}, {
   apiKey = process.env.OPENROUTER_API_KEY
 } = {}) {
   const baseline = parseStrategyPrompt(prompt, defaults);
-  const generated = await callOpenRouterJson({
+  let generated;
+  try { generated = await callOpenRouterJson({
     model,
     fetchImpl,
     temperature: 0,
@@ -24,7 +25,11 @@ export async function parseStrategyPromptWithOpenRouter(prompt, defaults = {}, {
         content: JSON.stringify({ prompt: String(prompt ?? "").slice(0, 12000), defaults, baselineRules: baseline.rules })
       }
     ]
-  });
+  }); }
+  catch (error) {
+    if (error.code === "AI_PROVIDER_NOT_CONFIGURED") return { ...baseline, parser: "deterministic-fallback:no-openrouter" };
+    throw error;
+  }
 
   const generatedRules = generated?.rules && typeof generated.rules === "object" ? generated.rules : {};
   const rules = Object.fromEntries(Object.entries(baseline.rules).map(([key, value]) => {
