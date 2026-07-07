@@ -35,7 +35,7 @@ export function verifyWebhook(rawBody, signature, secret) {
 export async function applySubscriptionEvent(db, event, now = new Date()) {
   if (!event || event.type !== "subscription.updated") throw badRequest("Unsupported billing event.");
   const data = event.data;
-  if (!data?.userId || !["free", "trial", "pro"].includes(data.plan) || !["active", "trialing", "past_due", "canceled"].includes(data.status)) {
+  if (!data?.userId || !["free", "starter", "trial", "pro", "power"].includes(data.plan) || !["active", "trialing", "past_due", "canceled"].includes(data.status)) {
     throw badRequest("Billing event data is invalid.");
   }
   const result = await db.prepare(`

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+﻿import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SaaSWorkspace from "./SaaSWorkspace";
 
@@ -32,7 +32,7 @@ describe("server-backed SaaS workspace", () => {
     await screen.findByText("Describe the strategy");
     expect(screen.getByDisplayValue("SPY")).toBeTruthy();
     expect(screen.getByDisplayValue("15m")).toBeTruthy();
-    expect(screen.getByDisplayValue("30 days · Free intraday")).toBeTruthy();
+    expect(screen.getByDisplayValue("30 days - Free intraday")).toBeTruthy();
     expect(screen.getByDisplayValue("09:30")).toBeTruthy();
     expect(screen.queryByText("Premium data required")).toBeNull();
   });

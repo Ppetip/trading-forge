@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight, BarChart3, Beaker, BookOpen, Check, Database, FileText, FlaskConical,
   LogOut, Play, Save, Sparkles, Upload, UserRound
@@ -44,7 +44,7 @@ type PreflightClassification = {
 };
 
 const defaults: StrategyRules = {
-  name: "SPY 9:30 Opening Range", strategyType: "opening_range_breakout", market: "Futures",
+  name: "SPY 9:30 Opening Range", strategyType: "opening_range_breakout", market: "ETF",
   symbol: "SPY", timeframe: "15m", dateRange: "30d", sessionTime: "09:30",
   timezone: "America/New_York", openingRangeMinutes: 15, entryRule: "break_above_or_below_range",
   stopRule: "opposite_side_of_range", rewardRisk: 2, direction: "long_and_short",
@@ -52,7 +52,7 @@ const defaults: StrategyRules = {
 };
 
 const formatR = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}R`;
-const yearsFor = (range: StrategyRules["dateRange"]) => ({ "30d": 30 / 365, "60d": 60 / 365, "6m": 0.5, "1y": 1, "3y": 3, "5y": 5 })[range] ?? 1;
+const yearsFor = (range: StrategyRules["dateRange"]) => ({ "30d": 30 / 365, "60d": 60 / 365, "6m": 0.5, "1y": 1, "2y": 2, "3y": 3, "4y": 4, "5y": 5 })[range] ?? 1;
 const hasPremiumData = (plan: ApiAccount["plan"]) => plan === "trial" || plan === "pro" || plan === "power";
 const cleanLabel = (value: string) => value.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
@@ -79,7 +79,7 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
   const [assumptions, setAssumptions] = useState<string[]>([]);
   const [readiness, setReadiness] = useState<StrategyReadiness>(STRATEGY_READINESS.READY_TO_BACKTEST);
   const [candles, setCandles] = useState<Candle[]>([]);
-  const [dataLabel, setDataLabel] = useState("Automatic Databento ready");
+  const [dataLabel, setDataLabel] = useState("Automatic research-grade ready");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [report, setReport] = useState<ServerResult | null>(null);
@@ -130,11 +130,37 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
     setAccount(response.account);
   }
 
+  function applyPreflightHints(classified: PreflightClassification) {
+    const detectedSymbol = classified.detectedSymbols.find(Boolean)?.toUpperCase();
+    const lower = prompt.toLowerCase();
+    const timeframeMatch = lower.match(/\b(1|5|15)\s*(?:m|min|minute|minutes)\b/);
+    const rangeMatch = lower.match(/\b(5|15|30|60)\s*(?:m|min|minute|minutes)\s+(?:range|opening range)\b/);
+    const yearsMatch = lower.match(/\b([1-5])\s*(?:y|yr|year|years)\b/);
+    const daysMatch = lower.match(/\b(30|60)\s*(?:d|day|days)\b/);
+    const sessionMatch = lower.match(/\b([0-2]?\d):([0-5]\d)\s*(am|pm)?\b/) ?? lower.match(/\b([0-2]?\d)\s*(am|pm)\b/);
+    const next: StrategyRules = { ...rules };
+    if (detectedSymbol) { next.symbol = detectedSymbol; next.name = detectedSymbol + " " + rules.strategyType.replaceAll("_", " "); }
+    if (timeframeMatch) next.timeframe = (timeframeMatch[1] + "m") as StrategyRules["timeframe"];
+    if (rangeMatch) next.openingRangeMinutes = Number(rangeMatch[1]) as StrategyRules["openingRangeMinutes"];
+    if (yearsMatch) next.dateRange = (yearsMatch[1] + "y") as StrategyRules["dateRange"];
+    if (daysMatch) next.dateRange = (daysMatch[1] + "d") as StrategyRules["dateRange"];
+    if (sessionMatch) {
+      let hour = Number(sessionMatch[1]);
+      const minute = sessionMatch[2]?.length === 2 ? sessionMatch[2] : "00";
+      const meridiem = sessionMatch[3] ?? sessionMatch[2];
+      if (meridiem === "pm" && hour < 12) hour += 12;
+      if (meridiem === "am" && hour === 12) hour = 0;
+      next.sessionTime = String(hour).padStart(2, "0") + ":" + minute;
+    }
+    setRules(next);
+  }
+
   async function parsePrompt(showConfirmation = true) {
     setError(""); if (showConfirmation) setMessage("");
     try {
       const classified = (await saasApi.preflightClassify(prompt, { symbol: rules.symbol, timezone: rules.timezone })).preflight as unknown as PreflightClassification;
       setPreflight(classified);
+      applyPreflightHints(classified);
       if (!classified.shouldRunFullParser) {
         setReadiness(STRATEGY_READINESS.NEEDS_CLARIFICATION);
         if (showConfirmation) setMessage("");
@@ -200,7 +226,7 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
 
   async function validateStrategy() {
     if (!account) return;
-    setError(""); setMessage("AI is clarifying the rules and preparing market data…");
+    setError(""); setMessage("AI is clarifying the rules and preparing market data...");
     try {
       const parsed = await parsePrompt(false);
       const tierWarning = candles.length ? null : dataWindowPaywall(parsed.rules, account.plan);
@@ -209,7 +235,7 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
       if (parsed.status === STRATEGY_READINESS.UNSUPPORTED_VAGUE_PROMPT) { setMessage(""); setError("Required execution rules are still subjective or undefined. Choose objective assumptions before testing."); return; }
       if (parsed.status === STRATEGY_READINESS.PARSED_BUT_UNSUPPORTED) { setMessage("Rules extracted successfully."); setError(`These rules are objective, but the ${parsed.rules.strategyType.replaceAll("_", " ")} server engine is not implemented. No report was created.`); return; }
       await runSingle(parsed.rules);
-      setDataLabel(`Automatic Databento · ${parsed.rules.dateRange || "1y"}`);
+      setDataLabel(`${hasPremiumData(account.plan) ? "Automatic premium data" : "Automatic research-grade data"} - ${parsed.rules.dateRange || "30d"}`);
       setMessage("Validation complete. Rules, market data, and report were saved.");
       await refreshAccount();
     } catch (caught) { handleError(caught); }
@@ -263,7 +289,7 @@ export default function SaaSWorkspace({ initialPage = "workspace" }: { initialPa
     } catch (caught) { handleError(caught); }
   }
 
-  if (loadingAccount) return <div className="saas-loading"><Beaker /> Loading EdgeLabâ€¦</div>;
+  if (loadingAccount) return <div className="saas-loading"><Beaker /> Loading EdgeLab...</div>;
   if (!account) return <AuthScreen onAuthenticated={async () => { await refreshAccount(); setPage(initialPage); }} />;
 
   return <div className="saas-shell">
@@ -340,10 +366,10 @@ function WorkspaceWithPaywall(props: WorkspaceProps) {
       <div className="market-data-status"><Database size={16} /><div><strong>Market data is automatic</strong><span>Research-grade data is used when possible. Premium intraday/futures requests are explained before running.</span></div><em>{props.dataLabel}</em><details><summary>Use custom CSV instead</summary><input hidden ref={props.fileRef} type="file" accept=".csv" onChange={(event) => props.onFile(event.target.files?.[0])} /><button onClick={props.upload}><Upload size={13} />Upload CSV</button></details></div>
       <div className="saas-card"><div className="saas-card-title"><span>03</span><h2>Exact rules</h2><em className={props.readiness === STRATEGY_READINESS.READY_TO_BACKTEST ? "valid" : ""}>{readinessLabel(props.readiness)}</em></div>{props.assumptions.length > 0 && <div className="assumption-list"><strong>Parser assumptions</strong>{props.assumptions.map((item) => <span key={item}>{item}</span>)}</div>}<pre>{JSON.stringify(props.rulePreview, null, 2)}</pre></div>
       {props.report && <ServerReport report={props.report} cached={props.cached} />}
-    </section><aside className="saas-settings"><details className="advanced-settings"><summary>Advanced controls</summary><h2>Test settings</h2><p>Every setting becomes part of the cache key.</p>
+    </section><aside className="saas-settings"><details className="advanced-settings" open><summary>Test settings & controls</summary><h2>Backtest controls</h2><p>Every setting becomes part of the cache key.</p>
       <label>Name<input value={rules.name} onChange={(event) => setRules({ ...rules, name: event.target.value })} /></label>
       <div className="field-row"><label>Symbol<input value={rules.symbol} onChange={(event) => setRules({ ...rules, symbol: event.target.value.toUpperCase() })} /></label><label>Timeframe<select value={rules.timeframe} onChange={(event) => setRules({ ...rules, timeframe: event.target.value as StrategyRules["timeframe"] })}><option>1m</option><option>5m</option><option>15m</option></select></label></div>
-      <label>Date range<select value={rules.dateRange} onChange={(event) => setRules({ ...rules, dateRange: event.target.value as StrategyRules["dateRange"] })}><option value="30d">30 days · Free intraday</option><option value="6m">6 months</option><option value="1y">1 year</option><option value="3y">3 years</option><option value="5y">5 years</option></select></label>
+      <label>Date range<select value={rules.dateRange} onChange={(event) => setRules({ ...rules, dateRange: event.target.value as StrategyRules["dateRange"] })}><option value="30d">30 days - Free intraday</option><option value="60d">60 days - Free intraday max</option><option value="6m">6 months</option><option value="1y">1 year</option><option value="2y">2 years</option><option value="3y">3 years</option><option value="4y">4 years</option><option value="5y">5 years</option></select></label>
       {tierWarning && <div className="tier-warning"><strong>Premium data required</strong><span>{rules.dateRange} of {rules.timeframe} candles needs Pro premium data, a shorter window, or uploaded candles.</span></div>}
       <div className="field-row"><label>Session<input type="time" value={rules.sessionTime} onChange={(event) => setRules({ ...rules, sessionTime: event.target.value })} /></label><label>Range<select value={rules.openingRangeMinutes} onChange={(event) => setRules({ ...rules, openingRangeMinutes: Number(event.target.value) as StrategyRules["openingRangeMinutes"] })}><option value="5">5 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option></select></label></div>
       <label>Risk/reward comparison <small className="pro-badge">PRO</small><select value={props.comparison} onChange={(event) => { if (props.plan === "free" && event.target.value !== "single") openComparisonPaywall(); else props.setComparison(event.target.value); }}><option value="single">Single · 1:{rules.rewardRisk}</option><option value="2,3,4">Compare · 1:2 / 1:3 / 1:4</option></select></label>
@@ -397,14 +423,14 @@ function Workspace(props: WorkspaceProps) {
     <div className="market-data-status"><Database size={16} /><div><strong>Market data is automatic</strong><span>Databento fetches at least one year unless your prompt requests another period.</span></div><em>{props.dataLabel}</em><details><summary>Use custom CSV instead</summary><input hidden ref={props.fileRef} type="file" accept=".csv" onChange={(event) => props.onFile(event.target.files?.[0])} /><button onClick={props.upload}><Upload size={13} />Upload CSV</button></details></div>
     <div className="saas-card"><div className="saas-card-title"><span>03</span><h2>Exact rules</h2><em className={props.readiness === STRATEGY_READINESS.READY_TO_BACKTEST ? "valid" : ""}>{readinessLabel(props.readiness)}</em></div>{props.assumptions.length > 0 && <div className="assumption-list"><strong>Parser assumptions</strong>{props.assumptions.map((item) => <span key={item}>{item}</span>)}</div>}<pre>{JSON.stringify(props.rulePreview, null, 2)}</pre></div>
     {props.report && <ServerReport report={props.report} cached={props.cached} />}
-  </section><aside className="saas-settings"><details className="advanced-settings"><summary>Advanced controls</summary><h2>Test settings</h2><p>Every setting becomes part of the cache key.</p><label>Name<input value={rules.name} onChange={(event) => setRules({ ...rules, name: event.target.value })} /></label><div className="field-row"><label>Symbol<input value={rules.symbol} onChange={(event) => setRules({ ...rules, symbol: event.target.value.toUpperCase() })} /></label><label>Timeframe<select value={rules.timeframe} onChange={(event) => setRules({ ...rules, timeframe: event.target.value as StrategyRules["timeframe"] })}><option>1m</option><option>5m</option><option>15m</option></select></label></div><div className="field-row"><label>Session<input type="time" value={rules.sessionTime} onChange={(event) => setRules({ ...rules, sessionTime: event.target.value })} /></label><label>Range<select value={rules.openingRangeMinutes} onChange={(event) => setRules({ ...rules, openingRangeMinutes: Number(event.target.value) as StrategyRules["openingRangeMinutes"] })}><option value="5">5 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option></select></label></div><label>Risk/reward comparison <small className="pro-badge">PRO</small><select value={props.comparison} onChange={(event) => props.setComparison(event.target.value)} disabled={props.plan === "free"}><option value="single">Single · 1:{rules.rewardRisk}</option><option value="2,3,4">Compare · 1:2 / 1:3 / 1:4</option></select></label>{props.plan === "free" && <a className="comparison-upgrade" href="#/account">Unlock controlled comparisons and AI experiments</a>}{props.comparison === "single" && <label>Reward / risk<input type="number" min="1" max="10" step=".5" value={rules.rewardRisk} onChange={(event) => setRules({ ...rules, rewardRisk: Number(event.target.value) })} /></label>}<label>Direction<select value={rules.direction} onChange={(event) => setRules({ ...rules, direction: event.target.value as StrategyRules["direction"] })}><option value="long_and_short">Long & short</option><option value="long_only">Long only</option><option value="short_only">Short only</option></select></label><Toggle label="Fees" checked={rules.fees} set={(fees) => setRules({ ...rules, fees })} /><Toggle label="Slippage" checked={rules.slippage} set={(slippage) => setRules({ ...rules, slippage })} /><button className="run-exact" onClick={props.run} disabled={props.readiness !== STRATEGY_READINESS.READY_TO_BACKTEST}><Play size={13} />{props.readiness === STRATEGY_READINESS.READY_TO_BACKTEST ? "Run exact rules" : "Clarify before testing"}</button><div className="server-note"><Database size={14} /><div><strong>Server-calculated</strong><span>Results are never generated by AI.</span></div></div></details></aside></div></>;
+  </section><aside className="saas-settings"><details className="advanced-settings" open><summary>Test settings & controls</summary><h2>Backtest controls</h2><p>Every setting becomes part of the cache key.</p><label>Name<input value={rules.name} onChange={(event) => setRules({ ...rules, name: event.target.value })} /></label><div className="field-row"><label>Symbol<input value={rules.symbol} onChange={(event) => setRules({ ...rules, symbol: event.target.value.toUpperCase() })} /></label><label>Timeframe<select value={rules.timeframe} onChange={(event) => setRules({ ...rules, timeframe: event.target.value as StrategyRules["timeframe"] })}><option>1m</option><option>5m</option><option>15m</option></select></label></div><div className="field-row"><label>Session<input type="time" value={rules.sessionTime} onChange={(event) => setRules({ ...rules, sessionTime: event.target.value })} /></label><label>Range<select value={rules.openingRangeMinutes} onChange={(event) => setRules({ ...rules, openingRangeMinutes: Number(event.target.value) as StrategyRules["openingRangeMinutes"] })}><option value="5">5 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option></select></label></div><label>Risk/reward comparison <small className="pro-badge">PRO</small><select value={props.comparison} onChange={(event) => props.setComparison(event.target.value)} disabled={props.plan === "free"}><option value="single">Single · 1:{rules.rewardRisk}</option><option value="2,3,4">Compare · 1:2 / 1:3 / 1:4</option></select></label>{props.plan === "free" && <a className="comparison-upgrade" href="#/account">Unlock controlled comparisons and AI experiments</a>}{props.comparison === "single" && <label>Reward / risk<input type="number" min="1" max="10" step=".5" value={rules.rewardRisk} onChange={(event) => setRules({ ...rules, rewardRisk: Number(event.target.value) })} /></label>}<label>Direction<select value={rules.direction} onChange={(event) => setRules({ ...rules, direction: event.target.value as StrategyRules["direction"] })}><option value="long_and_short">Long & short</option><option value="long_only">Long only</option><option value="short_only">Short only</option></select></label><Toggle label="Fees" checked={rules.fees} set={(fees) => setRules({ ...rules, fees })} /><Toggle label="Slippage" checked={rules.slippage} set={(slippage) => setRules({ ...rules, slippage })} /><button className="run-exact" onClick={props.run} disabled={props.readiness !== STRATEGY_READINESS.READY_TO_BACKTEST}><Play size={13} />{props.readiness === STRATEGY_READINESS.READY_TO_BACKTEST ? "Run exact rules" : "Clarify before testing"}</button><div className="server-note"><Database size={14} /><div><strong>Server-calculated</strong><span>Results are never generated by AI.</span></div></div></details></aside></div></>;
 }
 
 function Toggle({ label, checked, set }: { label: string; checked: boolean; set: (value: boolean) => void }) { return <div className="toggle-row"><span>{label}</span><button className={checked ? "toggle on" : "toggle"} onClick={() => set(!checked)}><span /></button></div>; }
 
 function ServerReport({ report, cached }: { report: ServerResult; cached: boolean }) {
   const result = report.result;
-  const stats = [["Total R", formatR(result.totalR)], ["Win rate", `${result.winRate.toFixed(1)}%`], ["Trades", String(result.trades.length)], ["Average R", formatR(result.averageR)], ["Profit factor", result.profitFactor === null ? "âˆž" : result.profitFactor.toFixed(2)], ["Drawdown", `-${result.maxDrawdown.toFixed(2)}R`]];
+  const stats = [["Total R", formatR(result.totalR)], ["Win rate", `${result.winRate.toFixed(1)}%`], ["Trades", String(result.trades.length)], ["Average R", formatR(result.averageR)], ["Profit factor", result.profitFactor === null ? "∞" : result.profitFactor.toFixed(2)], ["Drawdown", `-${result.maxDrawdown.toFixed(2)}R`]];
   return <div className="server-report"><div className="report-head"><div><p>{cached ? "CACHED REPORT REUSED" : "NEW SERVER REPORT"}</p><h2>{report.rules.name}</h2></div><a href="#/reports">Open report history <ArrowRight size={12} /></a></div><div className="report-stats">{stats.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="honesty-note">{result.trades.length < 30 && <span>Small sample warning: fewer than 30 trades.</span>}<span>Past backtest results do not guarantee live performance.</span></div></div>;
 }
 

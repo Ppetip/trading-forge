@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import { createDatabase } from "./db.mjs";
 import { routeMarketData, estimateDataCost } from "./market-data-router.mjs";
@@ -56,7 +56,7 @@ test("free 30-day intraday requests fetch only the requested safe window", async
 test("free long intraday requests explain the upgrade instead of silently clipping", async () => {
   const db = createDatabase(":memory:"), user = account(db);
   await assert.rejects(routeMarketData({ db, account: user, rules: { ...rules, timeframe: "5m", dateRange: "3y" } }),
-    (error) => error.code === "PREMIUM_INTRADAY_REQUIRED" && error.status === 402 && error.details.researchLimitDays === 59 && /Upgrade to Pro/.test(error.message));
+    (error) => error.code === "PREMIUM_INTRADAY_REQUIRED" && error.status === 402 && error.details.researchLimitDays === 60 && /Upgrade to Pro/.test(error.message));
   db.close();
 });
 

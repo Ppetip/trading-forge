@@ -40,7 +40,7 @@ function yahooInterval(timeframe) {
 }
 function dateWindow(rules, now = new Date()) {
   const end = new Date(now), interval = yahooInterval(rules?.timeframe), intraday = interval !== "1d";
-  const maxDays = interval === "1m" ? 7 : 59, start = new Date(end);
+  const maxDays = interval === "1m" ? 7 : 60, start = new Date(end);
   if (intraday) start.setUTCDate(start.getUTCDate() - Math.min(maxDays, requestedDays(rules))); else start.setUTCFullYear(start.getUTCFullYear() - requestedYears(rules));
   return { start, end, interval, intraday, maxDays };
 }
@@ -55,10 +55,16 @@ async function readCache(identity) {
   try { const payload = JSON.parse(await readFile(cachePath(identity), "utf8")); return Array.isArray(payload.candles) ? payload : null; } catch { return null; }
 }
 async function writeCache(identity, candles, providerMetadata) {
-  await mkdir(CACHE_ROOT, { recursive: true });
-  const target = cachePath(identity), temporary = `${target}.${randomUUID()}.tmp`;
-  await writeFile(temporary, JSON.stringify({ version: CACHE_VERSION, identity, providerMetadata, cachedAt: new Date().toISOString(), candles }));
-  await rename(temporary, target);
+  try {
+    await mkdir(CACHE_ROOT, { recursive: true });
+    const target = cachePath(identity), temporary = `${target}.${randomUUID()}.tmp`;
+    await writeFile(temporary, JSON.stringify({ version: CACHE_VERSION, identity, providerMetadata, cachedAt: new Date().toISOString(), candles }));
+    await rename(temporary, target);
+    return { ok: true, path: target };
+  } catch (error) {
+    console.error("Market-data cache write failed:", error.message);
+    return { ok: false, error: error.message };
+  }
 }
 function provenance(query, overrides = {}) {
   return { provider: query.provider, grade: query.provider === "databento" ? "premium" : query.provider === "uploaded" ? "uploaded" : "research",
@@ -110,7 +116,7 @@ export async function routeMarketData({ db, account, rules, candles, fetchImpl =
     "DATA_CONTROL_DAILY_ONLY", 503, { requestedTimeframe: rules?.timeframe, allowedTimeframe: "1d" });
   const forceProxy = Boolean(controls.forceProxyForFutures && futureProxy);
   const premiumAllowed = PREMIUM_PLANS.has(plan) && !forceProxy;
-  const wantsPremium = preferredProvider === "databento" || rules?.dataProvider === "databento";
+  const wantsPremium = premiumAllowed || preferredProvider === "databento" || rules?.dataProvider === "databento";
   const longIntradayResearchRequest = window.intraday && requestedDays(rules) > window.maxDays;
   if (longIntradayResearchRequest && (!premiumAllowed || forceProxy)) {
     const proxyText = futureProxy ? ` Free mode can test ${futureProxy} as a daily proxy, but it cannot run ${requestedSymbol} multi-year intraday futures.` : "";
@@ -140,7 +146,9 @@ export async function routeMarketData({ db, account, rules, candles, fetchImpl =
       interval: String(rules.timeframe ?? "5m"), start: window.start.toISOString(), end: window.end.toISOString(), timezone: rules.timezone ?? "America/New_York",
       adjusted: false, continuous: Boolean(futureProxy) };
     await recordUsage(db, account.id, "data_request_started", query);
-    const result = await fetchDatabentoCandles(rules, { fetchImpl, returnMetadata: true });
+    let result;
+    try { result = await fetchDatabentoCandles(rules, { fetchImpl, returnMetadata: true }); }
+    catch (error) { await recordUsage(db, account.id, "data_provider_error", { ...query, errorCode: error.code ?? "PREMIUM_DATA_FAILED", status: error.status ?? null }); throw error; }
     if (result.downloads > 0) await assertUsage(db, account, "premium_data_window", "newPremiumWindows", now);
     await recordUsage(db, account.id, result.downloads > 0 ? "data_provider_fetch" : "data_cache_hit", { ...query, rowsReturned: result.candles.length,
       providerCalls: result.providerCalls, cacheHit: result.downloads === 0 });
@@ -165,7 +173,8 @@ export async function routeMarketData({ db, account, rules, candles, fetchImpl =
   let result;
   try { result = await fetchYahoo(query, fetchImpl); }
   catch (error) { await recordUsage(db, account.id, "data_provider_error", { ...query, errorCode: error.code ?? "RESEARCH_DATA_FAILED" }); throw error; }
-  await writeCache(identity, result.candles, result.metadata);
+  const cacheWrite = await writeCache(identity, result.candles, result.metadata);
+  if (!cacheWrite.ok) await recordUsage(db, account.id, "data_cache_write_error", { ...query, errorCode: "CACHE_WRITE_FAILED", message: cacheWrite.error });
   await recordUsage(db, account.id, "data_provider_fetch", { ...query, rowsReturned: result.candles.length, providerCalls: 1 });
   if (futureProxy) await recordUsage(db, account.id, "proxy_symbol_used", query);
   return { candles: result.candles, dataProvenance: provenance(query, { providerCalls: 1,
